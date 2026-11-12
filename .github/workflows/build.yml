@@ -1,0 +1,77 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
+  pull_request:
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_call:
+    inputs:
+      version:
+        description: The version to stamp; empty builds a development version
+        type: string
+        default: ''
+      ref:
+        description: The commit to build
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, target: Linux-x64 }
+          - { os: ubuntu-24.04-arm, target: Linux-arm64 }
+          - { os: macos-15, target: macOS-arm64 }
+          - { os: macos-15-intel, target: macOS-x64 }
+          - { os: windows-2025, target: Windows-x64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install the toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang clang-format
+
+      - name: Install the toolchain
+        if: runner.os == 'macOS'
+        run: brew install ninja llvm && echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+
+      - name: Check the format
+        if: runner.os == 'Linux' && matrix.target == 'Linux-x64'
+        run: find hoist-* \( -name '*.hpp' -o -name '*.cpp' \) | xargs clang-format --dry-run --Werror
+
+      - name: Configure
+        env:
+          GITHUB_RUN_NUMBER: ${{ inputs.version && '' || github.run_number }}
+        run: cmake --preset release -DHOIST_WERROR=ON ${{ inputs.version && format('-DHOIST_VERSION_OVERRIDE={0}', inputs.version) || '' }}
+
+      - name: Build
+        run: cmake --build build/release
+
+      - name: Test
+        run: ctest --preset release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: basalt-hoist-${{ matrix.target }}
+          path: build/release/bin/BasaltHoist-*
+          if-no-files-found: error

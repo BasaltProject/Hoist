@@ -1,0 +1,19 @@
+# /etc/systemd/system/basalt-server.service
+[Unit]
+Description=Basalt Server, kept up to date by Hoist
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=basalt
+WorkingDirectory=/srv/basalt/server
+ExecStart=/srv/basalt/server/hoist run
+# Hoist exits 0 when the product is stopped from its console; 5 means the product keeps crashing.
+Restart=on-failure
+RestartPreventExitStatus=5
+# Hoist stops the product cleanly on SIGTERM and waits for it to save.
+KillSignal=SIGTERM
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target
