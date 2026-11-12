@@ -1,6 +1,7 @@
 #include <basalt/hoist/net/Json.hpp>
 
 #include <charconv>
+#include <cstdlib>
 
 namespace basalt::hoist::net {
 namespace {
@@ -83,8 +84,10 @@ private:
         }
         Json json;
         json.kind = Json::Kind::Number;
-        auto [end, error] = std::from_chars(text_.data() + start, text_.data() + pos_, json.number);
-        if (pos_ == start || error != std::errc{} || end != text_.data() + pos_) {
+        const std::string digits(text_.substr(start, pos_ - start));
+        char* end = nullptr;
+        json.number = std::strtod(digits.c_str(), &end);
+        if (pos_ == start || end != digits.c_str() + digits.size()) {
             return fail("not a JSON value");
         }
         return json;

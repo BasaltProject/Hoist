@@ -21,9 +21,6 @@
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0-green">
 </p>
 
-> ⚠️ **Early development.** Hoist has only been run on Linux, against a fake release server and against the real
-> GitHub releases of Server and Proxy (checks and a verified download). The status table below is the honest state.
-
 ## Overview
 
 Basalt Hoist is a launcher for [Basalt Server](https://github.com/BasaltProject/Server) and
@@ -92,7 +89,7 @@ name = "empty"
 when = "%players_online% == 0"
 ```
 
-Placeholders carry no prefix: `%time%`, `%hour%`, `%minute%`, `%weekday%`, `%players_online%`, `%players_max%`, `%tps%`,
+The placeholders are `%time%`, `%hour%`, `%minute%`, `%weekday%`, `%players_online%`, `%players_max%`, `%tps%`,
 `%uptime_minutes%`, `%update_available%`, `%installed_version%`, `%new_version%`, `%update_jump%`, `%channel%`. A
 placeholder with no value makes the condition false, so nothing is ever applied blind. `schedule.toml` is reloaded
 while Hoist runs.
@@ -114,20 +111,6 @@ The binary lands in `build/release/bin/`. `cmake --preset debug` builds the debu
 runs the tests; `asan` runs them under the sanitizers.
 
 Examples for `systemd` and Docker are in [docs/examples](docs/examples).
-
-## Status
-
-| Area | State |
-|---|---|
-| Release detection, scope, channels | Done. Checked against the real Server and Proxy releases |
-| Verified download (SHA-256) | Done. A real Server binary was downloaded and verified |
-| Daily restart, conditions, warnings, immediate, manual | Done, exercised against a fake product |
-| Rollback of a version that does not start, crash limit | Done, exercised against a fake product |
-| Backups before an update | Done, covered by the test of the swap only |
-| Player count from the API and the server list ping | Written. Not yet run against a live Server or Proxy |
-| Windows and macOS | Written and not run. Windows process control and certificate store are untested |
-| Linux musl, FreeBSD, Android builds | Not built yet |
-| Signed releases | Left out for now |
 
 ## License
 

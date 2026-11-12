@@ -6,7 +6,7 @@ if(CMAKE_TOOLCHAIN_FILE)
 endif()
 
 set(_hoist_vcpkg_root "")
-foreach(_candidate IN ITEMS "$ENV{VCPKG_ROOT}" "$ENV{VCPKG_INSTALLATION_ROOT}" "$ENV{HOME}/vcpkg" "$ENV{USERPROFILE}/vcpkg")
+foreach(_candidate IN ITEMS "$ENV{VCPKG_ROOT}" "$ENV{HOME}/vcpkg" "$ENV{USERPROFILE}/vcpkg")
     if(_candidate AND EXISTS "${_candidate}/scripts/buildsystems/vcpkg.cmake")
         set(_hoist_vcpkg_root "${_candidate}")
         break()

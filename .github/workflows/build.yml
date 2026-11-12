@@ -49,7 +49,10 @@ jobs:
 
       - name: Install the toolchain
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build clang clang-format
+        run: |
+          wget -qO llvm.sh https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 20
+          sudo apt-get install -y ninja-build clang-format-20 clang-tidy-20
+          echo "HOIST_CMAKE_ARGS=-DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20" >> "$GITHUB_ENV"
 
       - name: Install the toolchain
         if: runner.os == 'macOS'
@@ -57,19 +60,18 @@ jobs:
 
       - name: Check the format
         if: runner.os == 'Linux' && matrix.target == 'Linux-x64'
-        run: find hoist-* \( -name '*.hpp' -o -name '*.cpp' \) | xargs clang-format --dry-run --Werror
+        run: find hoist-* \( -name '*.hpp' -o -name '*.cpp' \) | xargs clang-format-20 --dry-run --Werror
 
       - name: Lint
         if: runner.os == 'Linux' && matrix.target == 'Linux-x64'
         run: |
-          sudo apt-get install -y clang-tidy
-          cmake --preset debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          find hoist-* -name '*.cpp' -not -path '*/test/*' | xargs clang-tidy -p build/debug --quiet
+          cmake --preset debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $HOIST_CMAKE_ARGS
+          find hoist-* -name '*.cpp' -not -path '*/test/*' | xargs clang-tidy-20 -p build/debug --quiet
 
       - name: Configure
         env:
           GITHUB_RUN_NUMBER: ${{ inputs.version && '' || github.run_number }}
-        run: cmake --preset release -DHOIST_WERROR=ON ${{ inputs.version && format('-DHOIST_VERSION_OVERRIDE={0}', inputs.version) || '' }}
+        run: cmake --preset release -DHOIST_WERROR=ON $HOIST_CMAKE_ARGS ${{ inputs.version && format('-DHOIST_VERSION_OVERRIDE={0}', inputs.version) || '' }}
 
       - name: Build
         run: cmake --build build/release
@@ -104,8 +106,9 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
         run: |
           docker run --rm -e VERSION -e RUN_NUMBER -e VCPKG_FORCE_SYSTEM_BINARIES=1 -v "$PWD:/src" -w /src alpine:3.23 sh -ec '
-            apk add --no-cache cmake ninja clang lld gcc g++ musl-dev linux-headers file binutils bash curl git zip unzip tar pkgconf perl python3
+            apk add --no-cache cmake ninja-is-really-ninja clang lld gcc g++ musl-dev linux-headers file binutils bash curl git zip unzip tar pkgconf perl python3
             [ -n "$VERSION" ] || VERSION="26.3.0-ci$RUN_NUMBER"
+            trap "cat build/release/_vcpkg/buildtrees/*/package-*-err.log build/release/_vcpkg/buildtrees/*/*-err.log 2>/dev/null | tail -60" EXIT
             cmake --preset release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DHOIST_WERROR=ON \
               -DHOIST_PLATFORM=Linux-musl -DHOIST_VERSION_OVERRIDE="$VERSION" \
               "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc"
@@ -143,7 +146,7 @@ jobs:
           shell: bash
           environment_variables: VERSION RUN_NUMBER
           run: |
-            sudo pkg install -y cmake ninja llvm git curl zip unzip pkgconf perl5 python3 bash
+            sudo pkg install -y cmake ninja llvm git curl zip unzip pkgconf perl5 python3 bash patchelf
             export VCPKG_FORCE_SYSTEM_BINARIES=1
             [ -n "$VERSION" ] || VERSION="26.3.0-ci$RUN_NUMBER"
             cmake --preset release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DHOIST_WERROR=ON \
@@ -172,7 +175,7 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       - name: Install the Android NDK
         run: |

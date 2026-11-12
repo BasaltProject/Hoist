@@ -34,7 +34,9 @@ TimeInfo fromTm(const std::tm& tm, std::int64_t epoch) {
     return info;
 }
 
+#ifndef _WIN32
 std::mutex zoneMutex;
+#endif
 
 std::optional<int> parseDigits(std::string_view text) {
     int value = 0;

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 
 namespace basalt::hoist::expr {
 
@@ -127,8 +128,8 @@ private:
                 ++end;
             }
         }
-        double value = 0;
-        std::from_chars(text_.data() + pos_, text_.data() + end, value);
+        const std::string digits(text_.substr(pos_, end - pos_));
+        const double value = std::strtod(digits.c_str(), nullptr);
         pos_ = end;
         return Token{Token::Kind::Number, {}, value, start};
     }
