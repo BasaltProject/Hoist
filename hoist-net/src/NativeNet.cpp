@@ -358,7 +358,7 @@ public:
             (defaultPort ? "" : ":" + std::to_string(url->port)) +
             "\r\nUser-Agent: BasaltHoist\r\nAccept: */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n";
         for (const auto& [name, value] : request.headers) {
-            text += name + ": " + value + "\r\n";
+            text.append(name).append(": ").append(value).append("\r\n");
         }
         text += "\r\n";
         if (!channel.write(text)) {

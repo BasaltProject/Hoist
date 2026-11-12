@@ -10,6 +10,8 @@
 
 namespace basalt::hoist::config {
 
+inline constexpr int kFormat = 1;
+
 enum class Target { Server, Proxy };
 
 std::string_view nameOf(Target target);

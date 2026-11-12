@@ -66,7 +66,7 @@ std::optional<std::string> resolveLocation(const Url& base, std::string_view loc
     const bool defaultPort = (base.scheme == "https" && base.port == 443) || (base.scheme == "http" && base.port == 80);
     const std::string host = base.host.find(':') != std::string::npos ? "[" + base.host + "]" : base.host;
     const std::string origin = base.scheme + "://" + host + (defaultPort ? "" : ":" + std::to_string(base.port));
-    if (location.starts_with("/")) {
+    if (location.starts_with('/')) {
         return origin + std::string(location);
     }
     if (location.empty()) {
@@ -131,12 +131,18 @@ std::expected<HttpResponse, std::string> httpGet(HttpClient& client, HttpRequest
 }
 
 std::expected<HttpResponse, std::string> httpDownload(HttpClient& client, HttpRequest request,
-                                                      const std::filesystem::path& file) {
-    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+                                                      const std::filesystem::path& file, bool resume) {
+    std::error_code ec;
+    const std::size_t have = resume ? static_cast<std::size_t>(std::filesystem::file_size(file, ec)) : 0;
+    const bool resuming = resume && !ec && have > 0;
+    std::ofstream out(file, resuming ? std::ios::binary | std::ios::app : std::ios::binary | std::ios::trunc);
     if (!out) {
         return std::unexpected("cannot write " + file.string());
     }
-    std::size_t written = 0;
+    if (resuming) {
+        request.headers.emplace_back("Range", "bytes=" + std::to_string(have) + "-");
+    }
+    std::size_t written = have;
     const std::size_t limit = request.maxBodyBytes;
     auto response = follow(client, std::move(request), [&](std::string_view chunk) {
         out.write(chunk.data(), static_cast<std::streamsize>(chunk.size()));
@@ -144,6 +150,9 @@ std::expected<HttpResponse, std::string> httpDownload(HttpClient& client, HttpRe
         return static_cast<bool>(out) && written <= limit;
     });
     out.close();
+    if (resuming && response && response->status == 200) {
+        return std::unexpected("the server ignored the request to resume");
+    }
     if (response && response->status >= 200 && response->status < 300 && (!out || written > limit)) {
         return std::unexpected(written > limit ? "the download is larger than the limit"
                                                : "cannot write " + file.string());

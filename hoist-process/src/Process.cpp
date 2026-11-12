@@ -110,6 +110,7 @@ std::expected<std::unique_ptr<Process>, std::string> spawn(const LaunchSpec& spe
     std::vector<std::string> storage{spec.command};
     storage.insert(storage.end(), spec.args.begin(), spec.args.end());
     std::vector<char*> argv;
+    argv.reserve(storage.size() + 1);
     for (auto& item : storage) {
         argv.push_back(item.data());
     }

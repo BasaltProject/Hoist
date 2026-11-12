@@ -56,20 +56,29 @@ std::expected<fs::path, std::string> downloadVerified(const github::GitHubClient
     }
     std::error_code ec;
     fs::create_directories(layout.staging(), ec);
-    const fs::path target = layout.staging() / asset.name;
-    auto response = net::httpDownload(*client.http(), client.downloadRequest(asset), target);
+    fs::path target = layout.staging() / asset.name;
+    const fs::path partial = layout.staging() / (asset.name + ".part");
+    auto response = net::httpDownload(*client.http(), client.downloadRequest(asset), partial, true);
     if (!response) {
-        removeQuietly(target);
+        // A dropped connection keeps what arrived so the next attempt can continue it.
+        if (response.error().find("ignored the request to resume") != std::string::npos) {
+            removeQuietly(partial);
+        }
         return std::unexpected("downloading " + asset.name + " failed: " + response.error());
     }
-    if (response->status != 200) {
-        removeQuietly(target);
+    if (response->status != 200 && response->status != 206) {
+        removeQuietly(partial);
         return std::unexpected("downloading " + asset.name + " answered " + std::to_string(response->status));
     }
-    auto actual = net::sha256File(target);
+    auto actual = net::sha256File(partial);
     if (!actual || *actual != *expected) {
-        removeQuietly(target);
+        removeQuietly(partial);
         return std::unexpected("the download of " + asset.name + " does not match its SHA-256 and was discarded");
+    }
+    fs::rename(partial, target, ec);
+    if (ec) {
+        removeQuietly(partial);
+        return std::unexpected("cannot move " + asset.name + " into place: " + ec.message());
     }
     fs::permissions(target, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
                     fs::perm_options::add, ec);

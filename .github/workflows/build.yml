@@ -59,6 +59,13 @@ jobs:
         if: runner.os == 'Linux' && matrix.target == 'Linux-x64'
         run: find hoist-* \( -name '*.hpp' -o -name '*.cpp' \) | xargs clang-format --dry-run --Werror
 
+      - name: Lint
+        if: runner.os == 'Linux' && matrix.target == 'Linux-x64'
+        run: |
+          sudo apt-get install -y clang-tidy
+          cmake --preset debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          find hoist-* -name '*.cpp' -not -path '*/test/*' | xargs clang-tidy -p build/debug --quiet
+
       - name: Configure
         env:
           GITHUB_RUN_NUMBER: ${{ inputs.version && '' || github.run_number }}

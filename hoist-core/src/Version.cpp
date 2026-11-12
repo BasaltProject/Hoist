@@ -26,7 +26,7 @@ std::optional<Version> parseVersion(std::string_view text) {
         if (!nightly) {
             return std::nullopt;
         }
-        version.nightly = *nightly;
+        version.nightly = nightly;
         text = text.substr(0, dash);
     }
     int fields[3];

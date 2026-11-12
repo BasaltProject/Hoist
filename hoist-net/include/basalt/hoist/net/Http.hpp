@@ -51,8 +51,9 @@ public:
 
 // Follow up to five redirects and never send the Authorization header to another host.
 std::expected<HttpResponse, std::string> httpGet(HttpClient& client, HttpRequest request);
+// With `resume`, a file already there is continued with a Range request; a server that ignores it is an error.
 std::expected<HttpResponse, std::string> httpDownload(HttpClient& client, HttpRequest request,
-                                                      const std::filesystem::path& file);
+                                                      const std::filesystem::path& file, bool resume = false);
 
 std::unique_ptr<HttpClient> makeNativeHttpClient(std::string caFile);
 

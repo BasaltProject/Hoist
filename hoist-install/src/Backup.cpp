@@ -61,7 +61,7 @@ std::expected<fs::path, std::string> backupData(const Layout& layout, const conf
     if (const auto space = fs::space(root, ec); !ec && space.available < needed + (needed / 10)) {
         return std::unexpected("not enough free space for the backup (" + std::to_string(needed) + " bytes needed)");
     }
-    const fs::path folder = root / (stamp(now) + "-" + std::string(from) + "-to-" + std::string(to));
+    fs::path folder = root / (stamp(now) + "-" + std::string(from) + "-to-" + std::string(to));
     fs::create_directories(folder, ec);
     for (const auto& source : sources) {
         const fs::path target = folder / fs::relative(source, layout.workingDirectory());

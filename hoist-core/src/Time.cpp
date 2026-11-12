@@ -100,8 +100,8 @@ std::optional<TimeInfo> toTimeInfo(std::int64_t epoch, std::string_view zone) {
 }
 
 std::int64_t epochFromUtc(int year, int month, int day, int hour, int minute, int second) {
-    return daysFromCivil(year, static_cast<unsigned>(month), static_cast<unsigned>(day)) * 86400 + hour * 3600 +
-           minute * 60 + second;
+    return daysFromCivil(year, static_cast<unsigned>(month), static_cast<unsigned>(day)) * 86400 +
+           std::int64_t{hour} * 3600 + std::int64_t{minute} * 60 + second;
 }
 
 std::optional<std::int64_t> parseIso8601(std::string_view text) {

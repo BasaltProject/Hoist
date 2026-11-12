@@ -21,6 +21,9 @@ std::expected<T, ConfigError> load(std::string_view text, std::string_view file,
     }
     ConfigError error;
     Reader root(*table, std::string(file), {}, error, warnings);
+    if (root.integer("format", 1, 1, 1000000) > kFormat) {
+        root.fail("format", "was written by a newer Hoist; this one reads format " + std::to_string(kFormat));
+    }
     T value;
     fill(root, value);
     root.finish();

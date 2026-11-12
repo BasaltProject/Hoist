@@ -153,7 +153,8 @@ warning-command = "say Restarting in %restart_in% seconds to update"
 )";
 
 std::string withTarget(std::string_view text, Target target) {
-    std::string out(text);
+    std::string out = "format = " + std::to_string(kFormat) + "\n";
+    out += text;
     if (auto at = out.find("@TARGET@"); at != std::string::npos) {
         out.replace(at, 8, nameOf(target));
     }
@@ -164,9 +165,9 @@ std::string withTarget(std::string_view text, Target target) {
 
 std::vector<std::pair<std::string, std::string>> defaultFiles(Target target) {
     return {{"launcher.toml", withTarget(kLauncher, target)},
-            {"updates.toml", std::string(kUpdates)},
-            {"schedule.toml", std::string(kSchedule)},
-            {"status.toml", std::string(kStatus)}};
+            {"updates.toml", withTarget(kUpdates, target)},
+            {"schedule.toml", withTarget(kSchedule, target)},
+            {"status.toml", withTarget(kStatus, target)}};
 }
 
 } // namespace basalt::hoist::config
