@@ -1,5 +1,7 @@
 # The binary is named the way it is downloaded, the same as Server and Proxy, and `hoist` points at it.
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+if(HOIST_PLATFORM)
+    set(_hoist_platform "${HOIST_PLATFORM}")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(_hoist_platform "macOS")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(_hoist_platform "Windows")

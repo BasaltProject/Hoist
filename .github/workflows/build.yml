@@ -82,3 +82,77 @@ jobs:
           name: basalt-hoist-${{ matrix.target }}
           path: build/release/bin/BasaltHoist-*
           if-no-files-found: error
+
+  musl:
+    name: Linux-musl-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, arch: x64 }
+          - { os: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Build and test on Alpine
+        env:
+          VERSION: ${{ inputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          docker run --rm -e VERSION -e RUN_NUMBER -e VCPKG_FORCE_SYSTEM_BINARIES=1 -v "$PWD:/src" -w /src alpine:3.23 sh -ec '
+            apk add --no-cache cmake ninja clang lld gcc g++ musl-dev linux-headers file binutils bash curl git zip unzip tar pkgconf perl python3
+            [ -n "$VERSION" ] || VERSION="26.3.0-ci$RUN_NUMBER"
+            cmake --preset release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DHOIST_WERROR=ON \
+              -DHOIST_PLATFORM=Linux-musl -DHOIST_VERSION_OVERRIDE="$VERSION" \
+              "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc"
+            cmake --build build/release
+            ctest --preset release
+            for binary in build/release/bin/BasaltHoist-*; do
+              file "$binary"
+              if readelf -d "$binary" | grep NEEDED | grep -v "libc.musl"; then exit 1; fi
+            done
+          '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: basalt-hoist-Linux-musl-${{ matrix.arch }}
+          path: build/release/bin/BasaltHoist-*
+          if-no-files-found: error
+
+  freebsd:
+    name: FreeBSD-x64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Build and test on FreeBSD
+        uses: cross-platform-actions/action@v0.29.0
+        env:
+          VERSION: ${{ inputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        with:
+          operating_system: freebsd
+          version: '14.3'
+          shell: bash
+          environment_variables: VERSION RUN_NUMBER
+          run: |
+            sudo pkg install -y cmake ninja llvm git curl zip unzip pkgconf perl5 python3 bash
+            export VCPKG_FORCE_SYSTEM_BINARIES=1
+            [ -n "$VERSION" ] || VERSION="26.3.0-ci$RUN_NUMBER"
+            cmake --preset release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DHOIST_WERROR=ON \
+              -DHOIST_VERSION_OVERRIDE="$VERSION"
+            cmake --build build/release
+            ctest --preset release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: basalt-hoist-FreeBSD-x64
+          path: build/release/bin/BasaltHoist-*
+          if-no-files-found: error
