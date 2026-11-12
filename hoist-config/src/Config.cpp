@@ -101,6 +101,8 @@ std::expected<UpdatesConfig, ConfigError> parseUpdates(std::string_view text, st
         c.assetPlatform = r.text("asset-platform", c.assetPlatform);
         c.caFile = r.text("ca-file", c.caFile);
         c.predownload = r.flag("predownload", c.predownload);
+        c.downloadLimitKibPerSecond =
+            r.integer("download-limit-kib-per-second", c.downloadLimitKibPerSecond, 0, 10000000);
         c.keepPrevious = r.integer("keep-previous", c.keepPrevious, 1, 50);
         c.rollbackGraceSeconds = r.integer("rollback-grace-seconds", c.rollbackGraceSeconds, 10, 3600);
         if (auto backup = r.section("backup")) {

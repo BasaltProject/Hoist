@@ -59,6 +59,8 @@ public:
     std::expected<std::string, std::string> fetchText(const Asset& asset) const;
     net::HttpRequest downloadRequest(const Asset& asset) const;
 
+    void limitDownloads(std::size_t kibPerSecond) { downloadBytesPerSecond_ = kibPerSecond * 1024; }
+
     net::HttpClient* http() const { return http_; }
 
 private:
@@ -66,6 +68,7 @@ private:
     std::string repository_;
     std::string apiUrl_;
     std::string token_;
+    std::size_t downloadBytesPerSecond_ = 0;
 };
 
 } // namespace basalt::hoist::github

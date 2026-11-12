@@ -54,6 +54,9 @@ check-interval-minutes = 30
 # Download a new version as soon as it is found, so applying it only needs a restart.
 predownload = false
 
+# Cap the download speed in KiB per second so a new version does not starve the players. 0 is unlimited.
+download-limit-kib-per-second = 0
+
 # Previous versions kept for rollback.
 keep-previous = 2
 

@@ -140,6 +140,7 @@ void UpdateWorker::loop(std::stop_token stop) {
 void UpdateWorker::check() {
     static const auto http = net::makeNativeHttpClient(settings_.caFile);
     github::GitHubClient client(*http, repository_, settings_.apiUrl, token_);
+    client.limitDownloads(static_cast<std::size_t>(settings_.downloadLimitKibPerSecond));
     std::string etag;
     {
         std::lock_guard lock(mutex_);
@@ -211,6 +212,7 @@ void UpdateWorker::download() {
     }
     logInfo("Downloading " + asset->name + ".");
     github::GitHubClient client(*http, repository_, settings_.apiUrl, token_);
+    client.limitDownloads(static_cast<std::size_t>(settings_.downloadLimitKibPerSecond));
     auto staged = install::downloadVerified(client, release, *asset, layout_);
     std::lock_guard lock(mutex_);
     if (!staged) {

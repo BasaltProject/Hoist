@@ -78,6 +78,7 @@ struct UpdatesConfig {
     std::string assetPlatform;
     std::string caFile;
     bool predownload = false;
+    int downloadLimitKibPerSecond = 0;
     int keepPrevious = 2;
     int rollbackGraceSeconds = 120;
     BackupConfig backup;

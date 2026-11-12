@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <fstream>
+#include <thread>
 
 namespace basalt::hoist::net {
 
@@ -143,10 +145,19 @@ std::expected<HttpResponse, std::string> httpDownload(HttpClient& client, HttpRe
         request.headers.emplace_back("Range", "bytes=" + std::to_string(have) + "-");
     }
     std::size_t written = have;
+    std::size_t received = 0;
+    const auto started = std::chrono::steady_clock::now();
+    const std::size_t rate = request.bytesPerSecond;
     const std::size_t limit = request.maxBodyBytes;
     auto response = follow(client, std::move(request), [&](std::string_view chunk) {
         out.write(chunk.data(), static_cast<std::streamsize>(chunk.size()));
         written += chunk.size();
+        received += chunk.size();
+        if (rate > 0) {
+            const auto due =
+                started + std::chrono::duration<double>(static_cast<double>(received) / static_cast<double>(rate));
+            std::this_thread::sleep_until(due);
+        }
         return static_cast<bool>(out) && written <= limit;
     });
     out.close();

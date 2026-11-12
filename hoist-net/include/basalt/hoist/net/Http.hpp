@@ -32,6 +32,7 @@ struct HttpRequest {
     int idleTimeoutSeconds = 20;
     int totalTimeoutSeconds = 0; // 0 means no overall limit
     std::size_t maxBodyBytes = 16u << 20;
+    std::size_t bytesPerSecond = 0; // downloads only; 0 means unlimited
 };
 
 struct HttpResponse {

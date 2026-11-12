@@ -199,6 +199,7 @@ net::HttpRequest GitHubClient::downloadRequest(const Asset& asset) const {
     request.url = asset.url;
     request.maxBodyBytes = std::size_t{2} << 30;
     request.idleTimeoutSeconds = 30;
+    request.bytesPerSecond = downloadBytesPerSecond_;
     return request;
 }
 

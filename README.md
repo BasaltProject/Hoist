@@ -68,7 +68,7 @@ Configuration lives in `config/`, one TOML file per domain, written commented on
 | File | What it holds |
 |---|---|
 | `launcher.toml` | Which product, its command and arguments, how it is stopped and restarted after a crash |
-| `updates.toml` | Channel (`release` or `nightly`), scope, check interval, backups, rollback grace |
+| `updates.toml` | Channel (`release` or `nightly`), scope, check interval, download speed limit, backups, rollback grace |
 | `schedule.toml` | When an update is applied: daily restart, immediate, and any number of conditions |
 | `status.toml` | How Hoist reads the player count from the product (API with a token, or the server list ping) |
 

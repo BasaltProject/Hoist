@@ -100,6 +100,7 @@ int commandCheck(const RunOptions& options) {
     }
     const auto http = net::makeNativeHttpClient(config.updates.caFile);
     github::GitHubClient client(*http, repositoryOf(config), config.updates.apiUrl, githubToken(config.updates));
+    client.limitDownloads(static_cast<std::size_t>(config.updates.downloadLimitKibPerSecond));
     const std::string product(config::productName(config.launcher.target));
     auto fetched = client.latest(config.updates.channel, product, "");
     if (!fetched) {
@@ -199,6 +200,7 @@ int commandUpdate(const RunOptions& options) {
     }
     const auto http = net::makeNativeHttpClient(config.updates.caFile);
     github::GitHubClient client(*http, repositoryOf(config), config.updates.apiUrl, githubToken(config.updates));
+    client.limitDownloads(static_cast<std::size_t>(config.updates.downloadLimitKibPerSecond));
     const std::string product(config::productName(config.launcher.target));
     auto fetched = client.latest(config.updates.channel, product, "");
     if (!fetched || !fetched->release.version) {
