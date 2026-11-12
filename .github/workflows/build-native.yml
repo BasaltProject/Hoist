@@ -82,5 +82,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: basalt-hoist-${{ inputs.target }}
-          path: build/release/bin/BasaltHoist-*
+          path: |
+            build/release/bin/BasaltHoist-*
+            !build/release/bin/*.pdb
           if-no-files-found: error
