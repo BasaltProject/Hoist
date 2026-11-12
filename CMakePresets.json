@@ -41,6 +41,30 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "HOIST_SANITIZE": "address,undefined"
       }
+    },
+    {
+      "name": "android-arm64",
+      "inherits": "release",
+      "displayName": "Android 10+, NDK arm64-v8a executable",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-android",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-29",
+        "ANDROID_STL": "c++_static"
+      }
+    },
+    {
+      "name": "android-x64",
+      "inherits": "release",
+      "displayName": "Android 10+, NDK x86_64 executable",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-android",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+        "ANDROID_ABI": "x86_64",
+        "ANDROID_PLATFORM": "android-29",
+        "ANDROID_STL": "c++_static"
+      }
     }
   ],
   "buildPresets": [
@@ -55,6 +79,14 @@
     {
       "name": "asan",
       "configurePreset": "asan"
+    },
+    {
+      "name": "android-arm64",
+      "configurePreset": "android-arm64"
+    },
+    {
+      "name": "android-x64",
+      "configurePreset": "android-x64"
     }
   ],
   "testPresets": [

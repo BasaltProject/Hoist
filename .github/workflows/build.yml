@@ -156,3 +156,54 @@ jobs:
           name: basalt-hoist-FreeBSD-x64
           path: build/release/bin/BasaltHoist-*
           if-no-files-found: error
+
+  android:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: Android-arm64, preset: android-arm64, machine: AArch64 }
+          - { target: Android-x64, preset: android-x64, machine: Advanced Micro Devices X86-64 }
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install the Android NDK
+        run: |
+          n=0
+          until sdkmanager 'ndk;29.0.14206865'; do
+            n=$((n + 1)); [ "$n" -lt 4 ] || exit 1; sleep $((n * 15))
+          done
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >>"$GITHUB_ENV"
+
+      - name: Build
+        env:
+          VERSION: ${{ inputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y ninja-build
+          [ -n "$VERSION" ] || VERSION="26.3.0-ci$RUN_NUMBER"
+          cmake --preset "${{ matrix.preset }}" -DHOIST_WERROR=ON "-DHOIST_VERSION_OVERRIDE=$VERSION"
+          cmake --build "build/${{ matrix.preset }}"
+
+      - name: Check the executable
+        env:
+          MACHINE: ${{ matrix.machine }}
+        run: |
+          binary=(build/${{ matrix.preset }}/bin/BasaltHoist-*)
+          readelf -h "${binary[0]}" | grep -F "$MACHINE"
+          if readelf -d "${binary[0]}" | grep NEEDED | grep -E 'libc\+\+_shared|libstdc\+\+|libgcc_s'; then
+              echo 'The executable needs a runtime Android does not ship'; exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: basalt-hoist-${{ matrix.target }}
+          path: build/${{ matrix.preset }}/bin/BasaltHoist-*
+          if-no-files-found: error
