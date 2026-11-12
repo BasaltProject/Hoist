@@ -2,13 +2,10 @@ cmake_minimum_required(VERSION 3.28)
 
 include(cmake/HoistVcpkg.cmake)
 
-# The version the binary is named after. The build number is the CI's run number; a build made anywhere else
-# has none and says so.
-set(HOIST_VERSION_BASE "26.3")
+# The version is <year>.<n>, where n grows with every commit to main. A build made outside the CI has no n and says so.
+set(HOIST_VERSION_BASE "26")
 if(HOIST_VERSION_OVERRIDE)
     set(HOIST_VERSION "${HOIST_VERSION_OVERRIDE}")
-elseif(DEFINED ENV{GITHUB_RUN_NUMBER} AND NOT "$ENV{GITHUB_RUN_NUMBER}" STREQUAL "")
-    set(HOIST_VERSION "${HOIST_VERSION_BASE}.$ENV{GITHUB_RUN_NUMBER}")
 else()
     set(HOIST_VERSION "${HOIST_VERSION_BASE}.0-dev")
 endif()

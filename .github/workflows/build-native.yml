@@ -66,8 +66,6 @@ jobs:
           find hoist-* -name '*.cpp' -not -path '*/test/*' | xargs clang-tidy-20 -p build/debug --quiet
 
       - name: Configure
-        env:
-          GITHUB_RUN_NUMBER: ${{ inputs.version && '' || github.run_number }}
         run: cmake --preset release -DHOIST_WERROR=ON $HOIST_CMAKE_ARGS ${{ inputs.version && format('-DHOIST_VERSION_OVERRIDE={0}', inputs.version) || '' }}
 
       - name: Build
