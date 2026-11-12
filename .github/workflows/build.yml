@@ -172,7 +172,7 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       - name: Install the Android NDK
         run: |
