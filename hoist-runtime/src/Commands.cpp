@@ -1,3 +1,4 @@
+#include <basalt/hoist/instance/Observer.hpp>
 #include <basalt/hoist/net/Http.hpp>
 #include <basalt/hoist/runtime/Commands.hpp>
 #include <basalt/hoist/runtime/Lock.hpp>
@@ -159,6 +160,21 @@ int commandStatus(const RunOptions& options) {
     if (state.rejected) {
         std::cout << "rejected:    " << state.rejected->version
                   << " (failed to start; not installed again by itself)\n";
+    }
+    if (running) {
+        const auto http = net::makeNativeHttpClient("");
+        instance::Observer observer(config.launcher.target, config.status, layout.workingDirectory(), *http,
+                                    [](const std::string& message) { logWarn(message); });
+        const auto live = observer.query();
+        if (live.playersOnline) {
+            std::cout << "players:     " << *live.playersOnline << "/" << live.playersMax.value_or(0) << " (via "
+                      << (live.source == instance::Status::Source::Api ? "the API" : "the server list ping") << ")\n";
+        } else {
+            std::cout << "players:     unknown\n";
+        }
+        if (live.tps) {
+            std::cout << "tps:         " << *live.tps << "\n";
+        }
     }
     std::cout << "schedule:    daily restart " << (config.schedule.dailyRestart.enabled ? "on" : "off")
               << ", immediate " << (config.schedule.immediate.enabled ? "on" : "off") << ", "

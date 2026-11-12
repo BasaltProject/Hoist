@@ -1,0 +1,3 @@
+Checks: 'bugprone-*,performance-*,-bugprone-easily-swappable-parameters,-bugprone-exception-escape'
+WarningsAsErrors: ''
+HeaderFilterRegex: 'hoist-.*/(include|src)/.*'
