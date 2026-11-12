@@ -1,0 +1,3 @@
+Checks: 'bugprone-*,performance-*,-bugprone-easily-swappable-parameters,-bugprone-exception-escape,-bugprone-unchecked-optional-access,-bugprone-signed-bitwise,-performance-enum-size,-performance-unnecessary-value-param'
+WarningsAsErrors: ''
+HeaderFilterRegex: 'hoist-.*/(include|src)/.*'
