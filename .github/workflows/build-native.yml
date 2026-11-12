@@ -1,0 +1,88 @@
+name: Build native
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        required: true
+      target:
+        type: string
+        required: true
+      arch:
+        description: Optional cross-architecture selection for macOS
+        type: string
+        default: ''
+      version:
+        description: The version to stamp; empty builds a development version
+        type: string
+        default: ''
+      ref:
+        description: The commit to build
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ inputs.target }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ${{ inputs.arch && format('{0}-cross', inputs.target) || inputs.target }}
+
+      - name: Install the toolchain
+        if: runner.os == 'Linux'
+        run: |
+          wget -qO llvm.sh https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 20
+          sudo apt-get install -y ninja-build clang-format-20 clang-tidy-20
+          echo "HOIST_CMAKE_ARGS=-DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20" >> "$GITHUB_ENV"
+
+      - name: Install the toolchain
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja llvm
+          echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+          if [ -n "${{ inputs.arch }}" ]; then
+              echo "HOIST_CMAKE_ARGS=-DCMAKE_OSX_ARCHITECTURES=${{ inputs.arch }} -DVCPKG_TARGET_TRIPLET=x64-osx" >> "$GITHUB_ENV"
+          fi
+
+      - name: Check the format
+        if: inputs.target == 'Linux-x64'
+        run: find hoist-* \( -name '*.hpp' -o -name '*.cpp' \) | xargs clang-format-20 --dry-run --Werror
+
+      - name: Lint
+        if: inputs.target == 'Linux-x64'
+        run: |
+          cmake --preset debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $HOIST_CMAKE_ARGS
+          find hoist-* -name '*.cpp' -not -path '*/test/*' | xargs clang-tidy-20 -p build/debug --quiet
+
+      - name: Configure
+        env:
+          GITHUB_RUN_NUMBER: ${{ inputs.version && '' || github.run_number }}
+        run: cmake --preset release -DHOIST_WERROR=ON $HOIST_CMAKE_ARGS ${{ inputs.version && format('-DHOIST_VERSION_OVERRIDE={0}', inputs.version) || '' }}
+
+      - name: Build
+        run: cmake --build build/release
+
+      - name: Test
+        if: inputs.arch == ''
+        run: ctest --preset release
+
+      - name: Check the architecture
+        if: inputs.arch != ''
+        run: file build/release/bin/BasaltHoist-* | grep -F "${{ inputs.arch }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: basalt-hoist-${{ inputs.target }}
+          path: build/release/bin/BasaltHoist-*
+          if-no-files-found: error

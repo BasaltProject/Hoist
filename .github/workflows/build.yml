@@ -6,6 +6,7 @@ on:
     paths-ignore: ['**.md', 'docs/**']
   pull_request:
     paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
   workflow_call:
     inputs:
       version:
@@ -25,65 +26,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  linux:
     name: ${{ matrix.target }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-24.04, target: Linux-x64 }
-          - { os: ubuntu-24.04-arm, target: Linux-arm64 }
-          - { os: macos-15, target: macOS-arm64 }
-          - { os: macos-15-intel, target: macOS-x64 }
-          - { os: windows-2025, target: Windows-x64 }
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
+          - os: ubuntu-24.04
+            target: Linux-x64
+          - os: ubuntu-24.04-arm
+            target: Linux-arm64
+    uses: ./.github/workflows/build-native.yml
+    with:
+      runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      version: ${{ inputs.version }}
+      ref: ${{ inputs.ref }}
 
-      - uses: hendrikmuhs/ccache-action@v1
-        with:
-          key: ${{ matrix.target }}
+  windows:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            target: Windows-x64
+    uses: ./.github/workflows/build-native.yml
+    with:
+      runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      version: ${{ inputs.version }}
+      ref: ${{ inputs.ref }}
 
-      - name: Install the toolchain
-        if: runner.os == 'Linux'
-        run: |
-          wget -qO llvm.sh https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 20
-          sudo apt-get install -y ninja-build clang-format-20 clang-tidy-20
-          echo "HOIST_CMAKE_ARGS=-DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20" >> "$GITHUB_ENV"
-
-      - name: Install the toolchain
-        if: runner.os == 'macOS'
-        run: brew install ninja llvm && echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
-
-      - name: Check the format
-        if: runner.os == 'Linux' && matrix.target == 'Linux-x64'
-        run: find hoist-* \( -name '*.hpp' -o -name '*.cpp' \) | xargs clang-format-20 --dry-run --Werror
-
-      - name: Lint
-        if: runner.os == 'Linux' && matrix.target == 'Linux-x64'
-        run: |
-          cmake --preset debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $HOIST_CMAKE_ARGS
-          find hoist-* -name '*.cpp' -not -path '*/test/*' | xargs clang-tidy-20 -p build/debug --quiet
-
-      - name: Configure
-        env:
-          GITHUB_RUN_NUMBER: ${{ inputs.version && '' || github.run_number }}
-        run: cmake --preset release -DHOIST_WERROR=ON $HOIST_CMAKE_ARGS ${{ inputs.version && format('-DHOIST_VERSION_OVERRIDE={0}', inputs.version) || '' }}
-
-      - name: Build
-        run: cmake --build build/release
-
-      - name: Test
-        run: ctest --preset release
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: basalt-hoist-${{ matrix.target }}
-          path: build/release/bin/BasaltHoist-*
-          if-no-files-found: error
+  macos:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: macOS-x64
+            arch: x86_64
+          - os: macos-15
+            target: macOS-arm64
+    uses: ./.github/workflows/build-native.yml
+    with:
+      runner: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      arch: ${{ matrix.arch }}
+      version: ${{ inputs.version }}
+      ref: ${{ inputs.ref }}
 
   musl:
     name: Linux-musl-${{ matrix.arch }}
@@ -91,8 +83,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-24.04, arch: x64 }
-          - { os: ubuntu-24.04-arm, arch: arm64 }
+          - os: ubuntu-24.04
+            arch: x64
+          - os: ubuntu-24.04-arm
+            arch: arm64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -127,8 +121,14 @@ jobs:
           if-no-files-found: error
 
   freebsd:
-    name: FreeBSD-x64
-    runs-on: ubuntu-24.04
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: FreeBSD-x64
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -156,7 +156,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: basalt-hoist-FreeBSD-x64
+          name: basalt-hoist-${{ matrix.target }}
           path: build/release/bin/BasaltHoist-*
           if-no-files-found: error
 
@@ -166,8 +166,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { target: Android-arm64, preset: android-arm64, machine: AArch64 }
-          - { target: Android-x64, preset: android-x64, machine: Advanced Micro Devices X86-64 }
+          - target: Android-arm64
+            preset: android-arm64
+            machine: AArch64
+          - target: Android-x64
+            preset: android-x64
+            machine: Advanced Micro Devices X86-64
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
