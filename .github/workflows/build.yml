@@ -6,27 +6,35 @@ on:
     paths-ignore: ['**.md', 'docs/**']
   pull_request:
     paths-ignore: ['**.md', 'docs/**']
-  workflow_dispatch:
-  workflow_call:
-    inputs:
-      version:
-        description: The version to stamp; empty builds a development version
-        type: string
-        default: ''
-      ref:
-        description: The commit to build
-        type: string
-        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Plan the version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+              .github/scripts/plan-version.sh release
+          else
+              .github/scripts/plan-version.sh ci
+          fi
   linux:
+    needs: plan
     name: ${{ matrix.target }}
     strategy:
       fail-fast: false
@@ -40,10 +48,10 @@ jobs:
     with:
       runner: ${{ matrix.os }}
       target: ${{ matrix.target }}
-      version: ${{ inputs.version }}
-      ref: ${{ inputs.ref }}
+      version: ${{ needs.plan.outputs.version }}
 
   windows:
+    needs: plan
     name: ${{ matrix.target }}
     strategy:
       fail-fast: false
@@ -55,10 +63,10 @@ jobs:
     with:
       runner: ${{ matrix.os }}
       target: ${{ matrix.target }}
-      version: ${{ inputs.version }}
-      ref: ${{ inputs.ref }}
+      version: ${{ needs.plan.outputs.version }}
 
   macos:
+    needs: plan
     name: ${{ matrix.target }}
     strategy:
       fail-fast: false
@@ -74,10 +82,10 @@ jobs:
       runner: ${{ matrix.os }}
       target: ${{ matrix.target }}
       arch: ${{ matrix.arch }}
-      version: ${{ inputs.version }}
-      ref: ${{ inputs.ref }}
+      version: ${{ needs.plan.outputs.version }}
 
   musl:
+    needs: plan
     name: Linux-musl-${{ matrix.arch }}
     strategy:
       fail-fast: false
@@ -91,12 +99,10 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
 
       - name: Build and test on Alpine
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.plan.outputs.version }}
           RUN_NUMBER: ${{ github.run_number }}
         run: |
           docker run --rm -e VERSION -e RUN_NUMBER -e VCPKG_FORCE_SYSTEM_BINARIES=1 -v "$PWD:/src" -w /src alpine:3.23 sh -ec '
@@ -121,6 +127,7 @@ jobs:
           if-no-files-found: error
 
   freebsd:
+    needs: plan
     name: ${{ matrix.target }}
     strategy:
       fail-fast: false
@@ -132,13 +139,11 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
 
       - name: Build and test on FreeBSD
         uses: cross-platform-actions/action@v0.29.0
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.plan.outputs.version }}
           RUN_NUMBER: ${{ github.run_number }}
         with:
           operating_system: freebsd
@@ -161,6 +166,7 @@ jobs:
           if-no-files-found: error
 
   android:
+    needs: plan
     name: ${{ matrix.target }}
     strategy:
       fail-fast: false
@@ -176,8 +182,6 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
 
       - uses: android-actions/setup-android@v4
 
@@ -191,7 +195,7 @@ jobs:
 
       - name: Build
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.plan.outputs.version }}
           RUN_NUMBER: ${{ github.run_number }}
         run: |
           sudo apt-get update && sudo apt-get install -y ninja-build
@@ -214,3 +218,22 @@ jobs:
           name: basalt-hoist-${{ matrix.target }}
           path: build/${{ matrix.preset }}/bin/BasaltHoist-*
           if-no-files-found: error
+
+  release:
+    if: ${{ github.event_name == 'push' }}
+    needs: [plan, linux, windows, macos, musl, freebsd, android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: basalt-hoist-*
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/publish-release.sh "${{ needs.plan.outputs.version }}" "$GITHUB_SHA" artifacts
