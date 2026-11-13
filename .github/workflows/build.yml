@@ -59,6 +59,8 @@ jobs:
         include:
           - os: windows-2025
             target: Windows-x64
+          - os: windows-11-arm
+            target: Windows-arm64
     uses: ./.github/workflows/build-native.yml
     with:
       runner: ${{ matrix.os }}
@@ -131,17 +133,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
-            target: FreeBSD-x64
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+          - target: FreeBSD-x64
+            cross: false
+            timeout: 90
+          - target: FreeBSD-arm64
+            cross: true
+            timeout: 90
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.timeout }}
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Build and test on FreeBSD
+        if: '!matrix.cross'
         uses: cross-platform-actions/action@v0.29.0
-        env:
-          VERSION: ${{ needs.plan.outputs.version }}
         with:
           operating_system: freebsd
           version: '14.3'
@@ -154,6 +161,45 @@ jobs:
               -DHOIST_VERSION_OVERRIDE="$VERSION"
             cmake --build build/release
             ctest --preset release
+
+      - uses: hendrikmuhs/ccache-action@v1
+        if: matrix.cross
+        with:
+          key: FreeBSD-arm64-cross
+
+      - name: Install the cross-compiler
+        if: matrix.cross
+        run: |
+          wget -qO llvm.sh https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 20
+          sudo apt-get install -y ninja-build lld-20
+
+      - name: Extract the FreeBSD arm64 sysroot
+        if: matrix.cross
+        run: .github/scripts/setup-freebsd-sysroot.sh
+
+      - name: Cross-build for FreeBSD arm64
+        if: matrix.cross
+        run: |
+          root="$PWD/build/freebsd-sysroot"
+          cmake --preset release -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 -DHOIST_WERROR=ON \
+            -DCMAKE_SYSTEM_NAME=FreeBSD -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+            -DCMAKE_C_COMPILER_TARGET=aarch64-unknown-freebsd14.5 \
+            -DCMAKE_CXX_COMPILER_TARGET=aarch64-unknown-freebsd14.5 \
+            "-DCMAKE_SYSROOT=$root" \
+            "-DCMAKE_CXX_FLAGS=-nostdinc++ -isystem $root/usr/include/c++/v1" \
+            "-DCMAKE_EXE_LINKER_FLAGS=-nostdlib++ -fuse-ld=lld" \
+            "-DCMAKE_CXX_STANDARD_LIBRARIES=$root/usr/lib/libc++.a $root/usr/lib/libcxxrt.a -lpthread" \
+            -DCMAKE_TRY_COMPILE_PLATFORM_VARIABLES=CMAKE_CXX_STANDARD_LIBRARIES \
+            -DCMAKE_ASM_COMPILER=clang-20 -DCMAKE_ASM_COMPILER_TARGET=aarch64-unknown-freebsd14.5 \
+            -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
+            -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY "-DHOIST_VERSION_OVERRIDE=$VERSION"
+          cmake --build build/release
+          for binary in build/release/bin/BasaltHoist-*; do
+              readelf -h "$binary" | grep -F AArch64
+              readelf -l "$binary" | grep -F /libexec/ld-elf.so.1
+              if readelf -d "$binary" | grep NEEDED | grep -E 'libc\+\+|libcxxrt'; then exit 1; fi
+          done
 
       - uses: actions/upload-artifact@v4
         with:

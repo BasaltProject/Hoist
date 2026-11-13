@@ -8,6 +8,7 @@
 
 #ifdef _WIN32
 #include <io.h>
+#include <windows.h>
 #else
 #include <unistd.h>
 #endif
@@ -29,7 +30,10 @@ bool colorEnabled() {
             return false;
         }
 #ifdef _WIN32
-        return _isatty(_fileno(stdout)) != 0;
+        const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+        DWORD mode = 0;
+        return _isatty(_fileno(stdout)) != 0 && GetConsoleMode(output, &mode) != 0 &&
+               SetConsoleMode(output, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0;
 #else
         return isatty(STDOUT_FILENO) != 0;
 #endif

@@ -4,10 +4,12 @@
 #include <chrono>
 #include <expected>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace basalt::hoist::process {
@@ -41,6 +43,12 @@ public:
 std::expected<std::unique_ptr<Process>, std::string> spawn(const LaunchSpec& spec);
 
 // Copies our own input to the child until it is gone or `stop` is set.
-void forwardInput(Process& child, const std::atomic<bool>& stop);
+// A line the filter takes (returns true) is not passed on to the child.
+using LineFilter = std::function<bool(std::string_view)>;
+
+void forwardInput(Process& child, const std::atomic<bool>& stop, const LineFilter& filter = {});
+
+// Ends the thread running forwardInput, waking it from a blocked read where the platform needs it.
+void stopInput(std::jthread& thread, std::atomic<bool>& stop);
 
 } // namespace basalt::hoist::process

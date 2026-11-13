@@ -15,6 +15,23 @@
 
 namespace basalt::hoist::process {
 
+namespace {
+
+void passLines(Process& child, std::string& pending, const LineFilter& filter) {
+    for (auto end = pending.find('\n'); end != std::string::npos; end = pending.find('\n')) {
+        std::string line = pending.substr(0, end);
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        if (!filter || !filter(line)) {
+            child.writeLine(line);
+        }
+        pending.erase(0, end + 1);
+    }
+}
+
+} // namespace
+
 #ifndef _WIN32
 namespace {
 
@@ -155,7 +172,7 @@ std::expected<std::unique_ptr<Process>, std::string> spawn(const LaunchSpec& spe
     return std::make_unique<PosixProcess>(pid, pipes[1]);
 }
 
-void forwardInput(Process& child, const std::atomic<bool>& stop) {
+void forwardInput(Process& child, const std::atomic<bool>& stop, const LineFilter& filter) {
     std::string pending;
     while (!stop && !child.poll()) {
         pollfd descriptor{STDIN_FILENO, POLLIN, 0};
@@ -172,15 +189,13 @@ void forwardInput(Process& child, const std::atomic<bool>& stop) {
             return;
         }
         pending.append(buffer, static_cast<std::size_t>(got));
-        for (auto end = pending.find('\n'); end != std::string::npos; end = pending.find('\n')) {
-            std::string line = pending.substr(0, end);
-            if (!line.empty() && line.back() == '\r') {
-                line.pop_back();
-            }
-            child.writeLine(line);
-            pending.erase(0, end + 1);
-        }
+        passLines(child, pending, filter);
     }
+}
+
+void stopInput(std::jthread& thread, std::atomic<bool>& stop) {
+    stop = true;
+    thread = {};
 }
 
 #else
@@ -256,7 +271,34 @@ std::expected<std::unique_ptr<Process>, std::string> spawn(const LaunchSpec& spe
     return std::make_unique<WindowsProcess>(info.hProcess, write, info.dwProcessId);
 }
 
-void forwardInput(Process&, const std::atomic<bool>&) {}
+void forwardInput(Process& child, const std::atomic<bool>& stop, const LineFilter& filter) {
+    const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    if (input == nullptr || input == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    std::string pending;
+    while (!stop && !child.poll()) {
+        char buffer[1024];
+        DWORD got = 0;
+        if (ReadFile(input, buffer, sizeof buffer, &got, nullptr) == 0 || got == 0) {
+            return;
+        }
+        pending.append(buffer, got);
+        passLines(child, pending, filter);
+    }
+}
+
+// A read on the console cannot be polled, so the blocked read is cancelled until the thread is gone.
+void stopInput(std::jthread& thread, std::atomic<bool>& stop) {
+    stop = true;
+    if (thread.joinable()) {
+        const HANDLE handle = thread.native_handle();
+        while (WaitForSingleObject(handle, 50) == WAIT_TIMEOUT) {
+            CancelSynchronousIo(handle);
+        }
+    }
+    thread = {};
+}
 
 #endif
 

@@ -4,6 +4,7 @@
 #include <basalt/hoist/instance/Observer.hpp>
 #include <basalt/hoist/net/Http.hpp>
 #include <basalt/hoist/process/Process.hpp>
+#include <basalt/hoist/runtime/Commands.hpp>
 #include <basalt/hoist/runtime/Lock.hpp>
 #include <basalt/hoist/runtime/Log.hpp>
 #include <basalt/hoist/runtime/Provisioning.hpp>
@@ -52,6 +53,7 @@ private:
     void startPoller();
     void tick();
     void refreshPlaceholders(const core::TimeInfo& now, const std::optional<PendingUpdate>& pending);
+    bool consoleCommand(std::string_view line);
     void handleRequests();
     void startBackupSchedule(const core::TimeInfo& now);
     void tickBackup(const core::TimeInfo& now);
@@ -209,7 +211,9 @@ bool Supervisor::startChild() {
     childAlive_ = true;
     childStarted_ = Steady::now();
     inputStop_ = false;
-    inputThread_ = std::jthread([this] { process::forwardInput(*child_, inputStop_); });
+    inputThread_ = std::jthread([this] {
+        process::forwardInput(*child_, inputStop_, [this](std::string_view line) { return consoleCommand(line); });
+    });
     logInfo("Started " + fs::path(spec.command).filename().string() + " (pid " + std::to_string(child_->id()) + ").");
     return true;
 }
@@ -243,8 +247,7 @@ process::ExitStatus Supervisor::stopChild() {
         }
         sleepFor(100ms);
     }
-    inputStop_ = true;
-    inputThread_ = {};
+    process::stopInput(inputThread_, inputStop_);
     childAlive_ = false;
     child_.reset();
     return *status;
@@ -287,8 +290,7 @@ void Supervisor::rollBack(const std::string& why) {
 }
 
 void Supervisor::onChildExit(const process::ExitStatus& status) {
-    inputStop_ = true;
-    inputThread_ = {};
+    process::stopInput(inputThread_, inputStop_);
     childAlive_ = false;
     child_.reset();
     if (status.clean()) {
@@ -435,6 +437,36 @@ void Supervisor::executeRestart() {
             crashed("The product does not start.");
         }
     }
+}
+
+bool Supervisor::consoleCommand(std::string_view line) {
+    std::istringstream words{std::string(line)};
+    std::string first;
+    words >> first;
+    if (first != "hoist") {
+        return false;
+    }
+    RunOptions options = options_;
+    std::string command;
+    words >> command;
+    for (std::string word; words >> word;) {
+        options.arguments.push_back(word);
+    }
+    if (command == "check") {
+        commandCheck(options);
+    } else if (command == "status") {
+        commandStatus(options);
+    } else if (command == "update") {
+        commandUpdate(options);
+    } else if (command == "rollback") {
+        commandRollback(options);
+    } else if (command == "backup") {
+        commandBackup(options);
+    } else {
+        logInfo("Hoist commands from the console: hoist check | status | update | rollback | "
+                "backup create [label] | list | restore <name|latest> | delete <name>");
+    }
+    return true;
 }
 
 void Supervisor::handleRequests() {

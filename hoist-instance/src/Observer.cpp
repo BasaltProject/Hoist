@@ -71,6 +71,9 @@ std::optional<Status> Observer::queryApi() {
         problem("api", unconfigured + " It refused the token.");
         return std::nullopt;
     }
+    if (response->status == 503) {
+        return std::nullopt;
+    }
     if (response->status != 200) {
         problem("api", unconfigured + " It answered " + std::to_string(response->status) + ".");
         return std::nullopt;
