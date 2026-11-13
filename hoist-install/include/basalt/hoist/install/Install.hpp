@@ -50,6 +50,8 @@ private:
     std::filesystem::path root_;
 };
 
+std::optional<config::Target> detectProduct(const Layout& layout);
+
 std::optional<Record> adoptExisting(const Layout& layout, config::Target target);
 
 // Downloads the asset for this platform and checks it against SHA256SUMS. Nothing unverified is ever left behind.

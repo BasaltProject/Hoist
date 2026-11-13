@@ -17,7 +17,7 @@ else()
 endif()
 set(_hoist_name "BasaltHoist-${HOIST_VERSION}-${_hoist_platform}-${_hoist_arch}")
 
-add_executable(basalt-hoist Main.cpp)
+add_executable(basalt-hoist Main.cpp Menu.cpp)
 target_link_libraries(basalt-hoist PRIVATE hoist::runtime)
 target_compile_definitions(basalt-hoist PRIVATE HOIST_VERSION="${HOIST_VERSION}")
 set_target_properties(basalt-hoist PROPERTIES

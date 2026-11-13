@@ -22,8 +22,11 @@ struct RunOptions {
     std::filesystem::path directory = ".";
     std::filesystem::path configDirectory; // empty means <directory>/config/hoist
     config::Target target = config::Target::Server;
+    bool targetChosen = false; // set by --target or by detecting the product in the folder
     std::vector<std::string> arguments;
 };
+
+void detectTarget(RunOptions& options);
 
 int runSupervisor(const RunOptions& options);
 

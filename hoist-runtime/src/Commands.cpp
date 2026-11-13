@@ -26,6 +26,28 @@ std::int64_t nowEpoch() {
         .count();
 }
 
+} // namespace
+
+void detectTarget(RunOptions& options) {
+    if (options.targetChosen) {
+        return;
+    }
+    const install::Layout layout(fs::absolute(options.directory));
+    const fs::path configDirectory =
+        options.configDirectory.empty() ? layout.configDirectory() : fs::absolute(options.configDirectory);
+    std::error_code ec;
+    if (fs::exists(configDirectory / "launcher.toml", ec)) {
+        return;
+    }
+    if (const auto found = install::detectProduct(layout)) {
+        options.target = *found;
+        options.targetChosen = true;
+        logInfo("Found Basalt " + std::string(config::nameOf(*found)) + " in this folder.");
+    }
+}
+
+namespace {
+
 std::expected<Loaded, int> load(const RunOptions& options) {
     install::Layout layout(fs::absolute(options.directory));
     const fs::path configDirectory =

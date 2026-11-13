@@ -48,7 +48,8 @@ The binary is named `BasaltHoist-<version>-<platform>-<arch>`; `hoist` is the sa
 
 | Command | What it does |
 |---|---|
-| `hoist run` | Start the product and keep it running (the default) |
+| `hoist run` | Start the product and keep it running |
+| `hoist` | With no command, ask what to do on a terminal; without one, print the commands and exit with code 2 |
 | `hoist init` | Write the default configuration |
 | `hoist check` | Look for a new version now and say what Hoist would do |
 | `hoist status` | Show what is installed and how Hoist is set up |

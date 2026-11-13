@@ -20,6 +20,28 @@ bool managedByHoist(const Layout& layout, const Record& record) {
 
 } // namespace
 
+std::optional<config::Target> detectProduct(const Layout& layout) {
+    bool server = false;
+    bool proxy = false;
+    std::error_code ec;
+    for (const auto& directory : {layout.workingDirectory(), layout.binaries()}) {
+        for (const auto& entry : fs::directory_iterator(directory, ec)) {
+            const std::string name = entry.path().filename().string();
+            if (!entry.is_regular_file()) {
+                continue;
+            }
+            server = server || name.starts_with("BasaltServer-");
+            proxy = proxy || name.starts_with("BasaltProxy-");
+        }
+    }
+    server = server || fs::exists(layout.workingDirectory() / "config" / "server.toml", ec);
+    proxy = proxy || fs::exists(layout.workingDirectory() / "config" / "proxy.toml", ec);
+    if (server == proxy) {
+        return std::nullopt;
+    }
+    return server ? config::Target::Server : config::Target::Proxy;
+}
+
 std::optional<Record> adoptExisting(const Layout& layout, config::Target target) {
     const std::string prefix = std::string(config::productName(target)) + "-";
     const std::string suffix = "-" + github::hostPlatform() + "-" + github::hostArch();

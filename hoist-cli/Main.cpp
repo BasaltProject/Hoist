@@ -1,3 +1,5 @@
+#include "Menu.hpp"
+
 #include <basalt/hoist/runtime/Commands.hpp>
 #include <basalt/hoist/runtime/Log.hpp>
 
@@ -15,10 +17,10 @@ namespace {
 
 constexpr const char* kHelp = R"(Basalt Hoist: keeps Basalt Server or Basalt Proxy up to date.
 
-Usage: hoist [command] [options]
+Usage: hoist <command> [options]   (without a command Hoist asks on a terminal)
 
 Commands:
-  run        Start the product and keep it running, checking for updates in the background (default)
+  run        Start the product and keep it running, checking for updates in the background
   init       Write the default configuration files and stop
   check      Look for a new version now and say what Hoist would do with it
   status     Show what is installed and how Hoist is set up
@@ -40,7 +42,7 @@ One folder holds one product and one Hoist. Configuration lives in config/hoist/
 
 int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
-    std::string command = "run";
+    std::string command;
     bool commandGiven = false;
     runtime::RunOptions options;
     for (std::size_t i = 0; i < args.size(); ++i) {
@@ -68,6 +70,7 @@ int main(int argc, char** argv) {
                     return runtime::kExitUsage;
                 }
                 options.target = *next == "proxy" ? config::Target::Proxy : config::Target::Server;
+                options.targetChosen = true;
             } else {
                 options.directory = *next;
             }
@@ -80,6 +83,10 @@ int main(int argc, char** argv) {
             runtime::logError("Unknown argument: " + arg + ". See `hoist --help`.");
             return runtime::kExitUsage;
         }
+    }
+    runtime::detectTarget(options);
+    if (!commandGiven) {
+        return cli::runMenu(options, HOIST_VERSION, kHelp);
     }
     if (command == "run") {
         return runtime::runSupervisor(options);
