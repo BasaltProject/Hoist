@@ -63,6 +63,7 @@ jobs:
         if: inputs.target == 'Linux-x64'
         run: |
           cmake --preset debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $HOIST_CMAKE_ARGS
+          cmake --build build/debug --target hoist-config-defaults
           find hoist-* -name '*.cpp' -not -path '*/test/*' | xargs clang-tidy-20 -p build/debug --quiet
 
       - name: Configure
