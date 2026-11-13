@@ -1,4 +1,6 @@
 #include <basalt/hoist/core/Time.hpp>
+#include <basalt/hoist/expr/Expression.hpp>
+#include <basalt/hoist/install/Backup.hpp>
 #include <basalt/hoist/instance/Observer.hpp>
 #include <basalt/hoist/net/Http.hpp>
 #include <basalt/hoist/process/Process.hpp>
@@ -51,6 +53,12 @@ private:
     void tick();
     void refreshPlaceholders(const core::TimeInfo& now, const std::optional<PendingUpdate>& pending);
     void handleRequests();
+    void startBackupSchedule(const core::TimeInfo& now);
+    void tickBackup(const core::TimeInfo& now);
+    void requestBackup(const std::string& kind);
+    void finishBackup();
+    void cancelBackup();
+    void restoreRequested(const std::string& name);
     void reloadConfiguration();
     void beginApply(Trigger trigger, const std::optional<PendingUpdate>& pending);
     void beginCountdown();
@@ -99,6 +107,18 @@ private:
     int exitCode_ = kExitOk;
     bool done_ = false;
     std::string lastPrepareError_;
+
+    enum class BackupPhase { Idle, Settling, Copying };
+    BackupPhase backupPhase_ = BackupPhase::Idle;
+    std::jthread backupThread_;
+    std::atomic<bool> backupFinished_{false};
+    std::expected<install::BackupInfo, std::string> backupResult_{std::unexpected(std::string{})};
+    std::string backupKind_;
+    Steady::time_point backupSettleUntil_;
+    std::optional<core::DailyRestart> backupDaily_;
+    std::optional<expr::Expression> backupWhen_;
+    std::int64_t backupNextEpoch_ = 0;
+    bool backupDue_ = false;
 };
 
 void Supervisor::saveState() {
@@ -117,8 +137,8 @@ void Supervisor::shutdown(int code) {
 void Supervisor::sleepFor(std::chrono::milliseconds time) { std::this_thread::sleep_for(time); }
 
 bool Supervisor::prepareConfig() {
-    configDirectory_ = options_.configDirectory.empty() ? layout_.workingDirectory() / "config"
-                                                        : fs::absolute(options_.configDirectory);
+    configDirectory_ =
+        options_.configDirectory.empty() ? layout_.configDirectory() : fs::absolute(options_.configDirectory);
     auto config = config::loadConfigDirectory(configDirectory_, options_.target);
     if (!config) {
         logError("Invalid configuration: " + config.error().describe());
@@ -130,7 +150,7 @@ bool Supervisor::prepareConfig() {
         logWarn(warning);
     }
     std::error_code ec;
-    for (const char* file : {"launcher.toml", "updates.toml", "schedule.toml", "status.toml"}) {
+    for (const char* file : {"launcher.toml", "updates.toml", "schedule.toml", "status.toml", "backup.toml"}) {
         configStamps_[file] = fs::last_write_time(configDirectory_ / file, ec);
     }
     return true;
@@ -375,16 +395,18 @@ void Supervisor::executeRestart() {
     phase_ = Phase::Running;
     auto pending = plan_.applyUpdate ? worker_->pending() : std::nullopt;
     bool apply = pending && pending->verdict == core::Verdict::Allowed && pending->staged;
+    cancelBackup();
     if (child_) {
         stopChild();
     }
     if (apply) {
         const std::string from = state_.installed ? state_.installed->version : "unknown";
         const std::string to = core::toString(pending->candidate.version);
-        if (config_.updates.backup.enabled && core::allows(config_.updates.backup.minScope, pending->jump)) {
-            auto copy = install::backupData(layout_, config_.updates.backup, from, to, nowEpoch());
+        if (config_.backup.enabled && config_.backup.beforeUpdate &&
+            core::allows(config_.backup.minScope, pending->jump)) {
+            auto copy = install::createBackup(layout_, config_.backup, "update-" + from + "-to-" + to, nowEpoch());
             if (copy) {
-                logInfo("Backup written to " + copy->string() + ".");
+                logInfo("Backup " + copy->name + " written (" + std::to_string(copy->files) + " files).");
             } else {
                 logError("Backup failed, the update is not applied: " + copy.error());
                 apply = false;
@@ -419,10 +441,22 @@ void Supervisor::handleRequests() {
     std::error_code ec;
     const fs::path update = requestsDirectory(layout_.workingDirectory()) / "update";
     const fs::path rollback = requestsDirectory(layout_.workingDirectory()) / "rollback";
+    const fs::path backup = requestsDirectory(layout_.workingDirectory()) / "backup";
+    const fs::path restore = requestsDirectory(layout_.workingDirectory()) / "restore";
     if (phase_ != Phase::Running) {
         return;
     }
-    if (fs::exists(update, ec)) {
+    if (fs::exists(backup, ec)) {
+        std::string label;
+        std::ifstream(backup) >> label;
+        fs::remove(backup, ec);
+        requestBackup(label.empty() ? "manual" : label);
+    } else if (fs::exists(restore, ec)) {
+        std::string name;
+        std::ifstream(restore) >> name;
+        fs::remove(restore, ec);
+        restoreRequested(name);
+    } else if (fs::exists(update, ec)) {
         fs::remove(update, ec);
         worker_->checkNow();
         manualUntil_ = Steady::now() + 60s;
@@ -437,6 +471,147 @@ void Supervisor::handleRequests() {
             }
             rollBack("Rollback requested.");
         }
+    }
+}
+
+void Supervisor::startBackupSchedule(const core::TimeInfo& now) {
+    const auto& schedule = config_.backup.schedule;
+    if (!config_.backup.enabled) {
+        return;
+    }
+    if (schedule.daily) {
+        backupDaily_.emplace(schedule.hour, schedule.minute, now);
+    }
+    if (!schedule.when.empty()) {
+        if (auto parsed = expr::Expression::parse(schedule.when)) {
+            backupWhen_ = std::move(*parsed);
+        }
+    }
+    if (schedule.everyHours > 0) {
+        const auto all = install::listBackups(install::backupRoot(layout_, config_.backup));
+        const std::int64_t last = all.empty() ? now.epoch : all.front().created;
+        backupNextEpoch_ = last + std::int64_t{schedule.everyHours} * 3600;
+    }
+    if (schedule.everyHours > 0 || schedule.daily) {
+        logInfo("Scheduled backups are on.");
+    }
+}
+
+void Supervisor::requestBackup(const std::string& kind) {
+    if (backupPhase_ != BackupPhase::Idle) {
+        logWarn("A backup is already running; the " + kind + " backup is skipped.");
+        return;
+    }
+    backupKind_ = kind;
+    logInfo("Starting a " + kind + " backup.");
+    if (child_ && !config_.backup.beforeCommands.empty()) {
+        for (const auto& command : config_.backup.beforeCommands) {
+            child_->writeLine(command);
+        }
+        backupSettleUntil_ = Steady::now() + std::chrono::seconds(config_.backup.settleSeconds);
+        backupPhase_ = BackupPhase::Settling;
+        return;
+    }
+    backupFinished_ = false;
+    backupPhase_ = BackupPhase::Copying;
+    backupThread_ = std::jthread([this](std::stop_token stop) {
+        backupResult_ = install::createBackup(layout_, config_.backup, backupKind_, nowEpoch(), stop);
+        backupFinished_ = true;
+    });
+}
+
+void Supervisor::finishBackup() {
+    backupThread_ = {};
+    backupPhase_ = BackupPhase::Idle;
+    if (child_) {
+        for (const auto& command : config_.backup.afterCommands) {
+            child_->writeLine(command);
+        }
+    }
+    if (config_.backup.schedule.everyHours > 0) {
+        backupNextEpoch_ = nowEpoch() + std::int64_t{config_.backup.schedule.everyHours} * 3600;
+    }
+    if (!backupResult_) {
+        logError("Backup failed: " + backupResult_.error());
+        return;
+    }
+    logInfo("Backup " + backupResult_->name + " written: " + std::to_string(backupResult_->files) + " files, " +
+            std::to_string(backupResult_->size >> 20) + " MiB.");
+    if (backupResult_->skipped > 0) {
+        logWarn(std::to_string(backupResult_->skipped) + " files vanished or could not be read and were left out.");
+    }
+}
+
+void Supervisor::cancelBackup() {
+    if (backupPhase_ == BackupPhase::Copying) {
+        backupThread_.request_stop();
+        backupThread_ = {};
+        logWarn("The running backup was cancelled.");
+    }
+    if (backupPhase_ != BackupPhase::Idle) {
+        for (const auto& command : config_.backup.afterCommands) {
+            if (child_) {
+                child_->writeLine(command);
+            }
+        }
+    }
+    backupPhase_ = BackupPhase::Idle;
+}
+
+void Supervisor::tickBackup(const core::TimeInfo& now) {
+    if (backupPhase_ == BackupPhase::Settling && Steady::now() >= backupSettleUntil_) {
+        backupFinished_ = false;
+        backupPhase_ = BackupPhase::Copying;
+        backupThread_ = std::jthread([this](std::stop_token stop) {
+            backupResult_ = install::createBackup(layout_, config_.backup, backupKind_, nowEpoch(), stop);
+            backupFinished_ = true;
+        });
+    } else if (backupPhase_ == BackupPhase::Copying && backupFinished_) {
+        finishBackup();
+    }
+    if (backupPhase_ != BackupPhase::Idle || phase_ != Phase::Running || !config_.backup.enabled) {
+        return;
+    }
+    const auto& schedule = config_.backup.schedule;
+    if (backupDaily_ && backupDaily_->due(now)) {
+        backupDue_ = true;
+    }
+    if (schedule.everyHours > 0 && now.epoch >= backupNextEpoch_) {
+        backupDue_ = true;
+    }
+    if (!backupDue_) {
+        return;
+    }
+    if (backupWhen_) {
+        const auto holds = backupWhen_->evaluate(placeholders_);
+        if (!holds || !*holds) {
+            return;
+        }
+    }
+    backupDue_ = false;
+    if (schedule.everyHours > 0) {
+        backupNextEpoch_ = now.epoch + std::int64_t{schedule.everyHours} * 3600;
+    }
+    requestBackup("scheduled");
+}
+
+void Supervisor::restoreRequested(const std::string& name) {
+    if (backupPhase_ != BackupPhase::Idle) {
+        logWarn("Restore requested while a backup is running; ask again when it ends.");
+        return;
+    }
+    logInfo("Restoring backup " + name + ": the product is stopped first.");
+    if (child_) {
+        stopChild();
+    }
+    auto restored = install::restoreBackup(layout_, config_.backup, name, nowEpoch());
+    if (restored) {
+        logInfo("Backup " + restored->name + " restored.");
+    } else {
+        logError("Restore failed: " + restored.error());
+    }
+    if (!startChild()) {
+        crashed("The product does not start.");
     }
 }
 
@@ -475,9 +650,10 @@ void Supervisor::tick() {
         reloadConfiguration();
     }
     handleRequests();
+    tickBackup(*now);
     switch (phase_) {
     case Phase::Running:
-        if (!child_) {
+        if (!child_ || backupPhase_ != BackupPhase::Idle) {
             return;
         }
         if (manualUntil_) {
@@ -582,6 +758,7 @@ int Supervisor::run() {
     const auto started = core::toTimeInfo(nowEpoch(), config_.schedule.timezone);
     scheduler_ =
         std::make_unique<Scheduler>(config_.schedule, *started, [](const std::string& text) { logWarn(text); });
+    startBackupSchedule(*started);
     startPoller();
     if (config_.launcher.managed && state_.installed) {
         logInfo("Hoist " + std::string(config::nameOf(config_.launcher.target)) + " folder; installed version " +
@@ -597,6 +774,7 @@ int Supervisor::run() {
         if (signalCount.load() > 0 && !shuttingDown) {
             shuttingDown = true;
             logInfo("Stopping on request.");
+            cancelBackup();
             if (child_) {
                 stopChild();
             }
@@ -606,6 +784,7 @@ int Supervisor::run() {
         tick();
         sleepFor(250ms);
     }
+    cancelBackup();
     poller_.request_stop();
     saveState();
     return exitCode_;

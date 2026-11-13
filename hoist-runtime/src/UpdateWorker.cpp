@@ -130,6 +130,11 @@ void UpdateWorker::loop(std::stop_token stop) {
         }
         if (doCheck) {
             check();
+            if (settings_.predownload) {
+                std::lock_guard lock(mutex_);
+                const auto current = judged();
+                doDownload = doDownload || (current && current->verdict == core::Verdict::Allowed && !current->staged);
+            }
         }
         if (doDownload) {
             download();

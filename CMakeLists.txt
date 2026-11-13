@@ -45,6 +45,7 @@ enable_testing()
 
 find_package(MbedTLS CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
+find_package(ZLIB REQUIRED)
 find_package(doctest CONFIG REQUIRED)
 
 add_subdirectory(hoist-core)

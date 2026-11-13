@@ -1,3 +1,4 @@
+#include <basalt/hoist/install/Backup.hpp>
 #include <basalt/hoist/instance/Observer.hpp>
 #include <basalt/hoist/net/Http.hpp>
 #include <basalt/hoist/runtime/Commands.hpp>
@@ -28,7 +29,7 @@ std::int64_t nowEpoch() {
 std::expected<Loaded, int> load(const RunOptions& options) {
     install::Layout layout(fs::absolute(options.directory));
     const fs::path configDirectory =
-        options.configDirectory.empty() ? layout.workingDirectory() / "config" : fs::absolute(options.configDirectory);
+        options.configDirectory.empty() ? layout.configDirectory() : fs::absolute(options.configDirectory);
     auto config = config::loadConfigDirectory(configDirectory, options.target);
     if (!config) {
         logError("Invalid configuration: " + config.error().describe());
@@ -68,17 +69,19 @@ core::Installed installedOf(const install::State& state) {
     return installed;
 }
 
-void leaveRequest(const fs::path& directory, const char* name) {
+void leaveRequest(const fs::path& directory, const char* name, const std::string& content = {}) {
     std::error_code ec;
     fs::create_directories(requestsDirectory(directory), ec);
-    std::ofstream(requestsDirectory(directory) / name) << nowEpoch() << "\n";
+    std::ofstream(requestsDirectory(directory) / name)
+        << (content.empty() ? std::to_string(nowEpoch()) : content) << "\n";
 }
 
 } // namespace
 
 int commandInit(const RunOptions& options) {
-    const fs::path configDirectory = options.configDirectory.empty() ? fs::absolute(options.directory) / "config"
-                                                                     : fs::absolute(options.configDirectory);
+    const fs::path configDirectory = options.configDirectory.empty()
+                                         ? install::Layout(fs::absolute(options.directory)).configDirectory()
+                                         : fs::absolute(options.configDirectory);
     if (auto written = config::writeMissingDefaults(configDirectory, options.target); !written) {
         logError(written.error().describe());
         return kExitError;
@@ -228,14 +231,15 @@ int commandUpdate(const RunOptions& options) {
         return kExitError;
     }
     const auto jump = core::classify(installedOf(state).version, candidate.version);
-    if (config.updates.backup.enabled && core::allows(config.updates.backup.minScope, jump)) {
-        auto copy = install::backupData(layout, config.updates.backup, state.installed->version,
-                                        core::toString(candidate.version), nowEpoch());
+    if (config.backup.enabled && config.backup.beforeUpdate && core::allows(config.backup.minScope, jump)) {
+        auto copy = install::createBackup(
+            layout, config.backup, "update-" + state.installed->version + "-to-" + core::toString(candidate.version),
+            nowEpoch());
         if (!copy) {
             logError("Backup failed, nothing was changed: " + copy.error());
             return kExitError;
         }
-        logInfo("Backup written to " + copy->string() + ".");
+        logInfo("Backup " + copy->name + " written.");
     }
     auto done =
         install::activate(layout, state, *staged, {"", core::toString(candidate.version), candidate.publishedAt},
@@ -266,6 +270,83 @@ int commandRollback(const RunOptions& options) {
     }
     logInfo("Went back to " + back->version + ".");
     return kExitOk;
+}
+
+int commandBackup(const RunOptions& options) {
+    auto loaded = load(options);
+    if (!loaded) {
+        return loaded.error();
+    }
+    auto& [config, layout, state] = *loaded;
+    const std::string action = options.arguments.empty() ? "list" : options.arguments.front();
+    const std::string argument = options.arguments.size() > 1 ? options.arguments[1] : "";
+    const fs::path root = install::backupRoot(layout, config.backup);
+    const bool running = folderLockHeld(layout.stateFile().parent_path() / "hoist.lock");
+    if (action == "list") {
+        const auto all = install::listBackups(root);
+        if (all.empty()) {
+            std::cout << "no backups in " << root.string() << "\n";
+        }
+        for (const auto& info : all) {
+            std::cout << info.name << (info.zipped ? ".zip" : "") << "  " << (info.size >> 20) << " MiB\n";
+        }
+        return kExitOk;
+    }
+    if (action == "create") {
+        if (config.backup.paths.empty()) {
+            logError("backup.toml lists no paths to copy.");
+            return kExitError;
+        }
+        if (running) {
+            leaveRequest(layout.workingDirectory(), "backup", argument.empty() ? "manual" : argument);
+            logInfo("Asked the running Hoist to take a backup now.");
+            return kExitOk;
+        }
+        auto copy = install::createBackup(layout, config.backup, argument.empty() ? "manual" : argument, nowEpoch());
+        if (!copy) {
+            logError("Backup failed: " + copy.error());
+            return kExitError;
+        }
+        logInfo("Backup " + copy->name + " written to " + copy->path.string() + " (" + std::to_string(copy->files) +
+                " files).");
+        return kExitOk;
+    }
+    if (action == "restore") {
+        if (argument.empty()) {
+            logError("Usage: hoist backup restore <name|latest>");
+            return kExitUsage;
+        }
+        if (running) {
+            if (auto found = install::findBackup(root, argument); !found) {
+                logError(found.error());
+                return kExitError;
+            }
+            leaveRequest(layout.workingDirectory(), "restore", argument);
+            logInfo("Asked the running Hoist to stop the product, restore " + argument + " and start it again.");
+            return kExitOk;
+        }
+        auto restored = install::restoreBackup(layout, config.backup, argument, nowEpoch());
+        if (!restored) {
+            logError("Restore failed: " + restored.error());
+            return kExitError;
+        }
+        logInfo("Backup " + restored->name + " restored. A copy of what it replaced was taken first.");
+        return kExitOk;
+    }
+    if (action == "delete") {
+        if (argument.empty()) {
+            logError("Usage: hoist backup delete <name>");
+            return kExitUsage;
+        }
+        if (auto done = install::deleteBackup(root, argument); !done) {
+            logError(done.error());
+            return kExitError;
+        }
+        logInfo("Backup " + argument + " deleted.");
+        return kExitOk;
+    }
+    logError("Unknown backup command: " + action + ". Use create, list, restore or delete.");
+    return kExitUsage;
 }
 
 } // namespace basalt::hoist::runtime

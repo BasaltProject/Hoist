@@ -36,6 +36,8 @@ public:
 
     const std::filesystem::path& workingDirectory() const { return root_; }
 
+    std::filesystem::path configDirectory() const { return root_ / "config" / "hoist"; }
+
     std::filesystem::path stateFile() const { return root_ / ".hoist" / "state.toml"; }
 
     std::filesystem::path binaries() const { return root_ / ".hoist" / "bin"; }
@@ -59,9 +61,5 @@ std::expected<void, std::string> activate(const Layout& layout, State& state, co
                                           const Record& record, int keepPrevious);
 
 std::expected<Record, std::string> rollback(const Layout& layout, State& state);
-
-std::expected<std::filesystem::path, std::string> backupData(const Layout& layout, const config::BackupConfig& settings,
-                                                             std::string_view from, std::string_view to,
-                                                             std::int64_t now);
 
 } // namespace basalt::hoist::install

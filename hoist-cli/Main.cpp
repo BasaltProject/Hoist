@@ -24,15 +24,16 @@ Commands:
   status     Show what is installed and how Hoist is set up
   update     Apply the pending update now (asks the running Hoist, or does it when none runs)
   rollback   Go back to the previous version
+  backup     create [label] | list | restore <name|latest> | delete <name>
   version    Print the version of Hoist
 
 Options:
   -C, --directory <dir>   The folder of the product (default: the current one)
-      --config <dir>      The configuration folder (default: <directory>/config)
+      --config <dir>      The configuration folder (default: <directory>/config/hoist)
       --target <product>  "server" or "proxy", used when the configuration is first written
   -h, --help              Show this help
 
-One folder holds one product and one Hoist. Configuration lives in config/*.toml.
+One folder holds one product and one Hoist. Configuration lives in config/hoist/*.toml.
 )";
 
 } // namespace
@@ -40,6 +41,7 @@ One folder holds one product and one Hoist. Configuration lives in config/*.toml
 int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
     std::string command = "run";
+    bool commandGiven = false;
     runtime::RunOptions options;
     for (std::size_t i = 0; i < args.size(); ++i) {
         const std::string& arg = args[i];
@@ -69,8 +71,11 @@ int main(int argc, char** argv) {
             } else {
                 options.directory = *next;
             }
-        } else if (!arg.empty() && arg.front() != '-' && (i == 0)) {
+        } else if (!arg.empty() && arg.front() != '-' && !commandGiven) {
             command = arg;
+            commandGiven = true;
+        } else if (!arg.empty() && arg.front() != '-' && command == "backup") {
+            options.arguments.push_back(arg);
         } else {
             runtime::logError("Unknown argument: " + arg + ". See `hoist --help`.");
             return runtime::kExitUsage;
@@ -93,6 +98,9 @@ int main(int argc, char** argv) {
     }
     if (command == "rollback") {
         return runtime::commandRollback(options);
+    }
+    if (command == "backup") {
+        return runtime::commandBackup(options);
     }
     runtime::logError("Unknown command: " + command + ". See `hoist --help`.");
     return runtime::kExitUsage;

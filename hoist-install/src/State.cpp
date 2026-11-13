@@ -70,7 +70,7 @@ std::expected<void, std::string> saveState(const std::filesystem::path& file, co
     const auto temporary = std::filesystem::path(file).concat(".tmp");
     {
         std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
-        out << "# Written by Hoist. Not configuration: edit config/ instead.\n" << table << "\n";
+        out << "# Written by Hoist. Not configuration: edit config/hoist/ instead.\n" << table << "\n";
         if (!out) {
             return std::unexpected("cannot write " + temporary.string());
         }

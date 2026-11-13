@@ -3,6 +3,8 @@
 #include <basalt/hoist/config/Config.hpp>
 
 #include <filesystem>
+#include <string>
+#include <vector>
 
 namespace basalt::hoist::runtime {
 
@@ -18,8 +20,9 @@ enum ExitCode : int {
 
 struct RunOptions {
     std::filesystem::path directory = ".";
-    std::filesystem::path configDirectory; // empty means <directory>/config
+    std::filesystem::path configDirectory; // empty means <directory>/config/hoist
     config::Target target = config::Target::Server;
+    std::vector<std::string> arguments;
 };
 
 int runSupervisor(const RunOptions& options);

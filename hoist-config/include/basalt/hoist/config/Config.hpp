@@ -41,12 +41,35 @@ struct LauncherConfig {
     int stableSeconds = 300;
 };
 
+struct BackupRetention {
+    int keepLast = 3;
+    int keepDaily = 0;
+    int keepWeekly = 0;
+    int maxAgeDays = 0;
+    int maxTotalMib = 0;
+};
+
+struct BackupSchedule {
+    int everyHours = 0;
+    bool daily = false;
+    int hour = 4;
+    int minute = 0;
+    std::string when;
+};
+
 struct BackupConfig {
     bool enabled = false;
-    core::Scope minScope = core::Scope::Build;
-    std::vector<std::string> paths;
     std::string destination = ".hoist/backups";
-    int keep = 3;
+    std::vector<std::string> paths;
+    std::vector<std::string> exclude;
+    bool compress = false;
+    BackupRetention retention;
+    bool beforeUpdate = true;
+    core::Scope minScope = core::Scope::Minor;
+    BackupSchedule schedule;
+    std::vector<std::string> beforeCommands;
+    std::vector<std::string> afterCommands;
+    int settleSeconds = 3;
 };
 
 struct ApiConfig {
@@ -81,7 +104,6 @@ struct UpdatesConfig {
     int downloadLimitKibPerSecond = 0;
     int keepPrevious = 2;
     int rollbackGraceSeconds = 120;
-    BackupConfig backup;
 };
 
 struct Warning {
@@ -120,6 +142,7 @@ struct Config {
     UpdatesConfig updates;
     ScheduleConfig schedule;
     StatusConfig status;
+    BackupConfig backup;
     std::vector<std::string> warnings;
 };
 
@@ -131,5 +154,6 @@ std::expected<LauncherConfig, ConfigError> parseLauncher(std::string_view text, 
 std::expected<UpdatesConfig, ConfigError> parseUpdates(std::string_view text, std::vector<std::string>& warnings);
 std::expected<ScheduleConfig, ConfigError> parseSchedule(std::string_view text, std::vector<std::string>& warnings);
 std::expected<StatusConfig, ConfigError> parseStatus(std::string_view text, std::vector<std::string>& warnings);
+std::expected<BackupConfig, ConfigError> parseBackup(std::string_view text, std::vector<std::string>& warnings);
 
 } // namespace basalt::hoist::config

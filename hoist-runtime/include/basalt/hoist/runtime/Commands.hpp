@@ -9,5 +9,6 @@ int commandCheck(const RunOptions& options);
 int commandStatus(const RunOptions& options);
 int commandUpdate(const RunOptions& options);
 int commandRollback(const RunOptions& options);
+int commandBackup(const RunOptions& options);
 
 } // namespace basalt::hoist::runtime

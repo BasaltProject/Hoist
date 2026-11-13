@@ -105,17 +105,70 @@ std::expected<UpdatesConfig, ConfigError> parseUpdates(std::string_view text, st
             r.integer("download-limit-kib-per-second", c.downloadLimitKibPerSecond, 0, 10000000);
         c.keepPrevious = r.integer("keep-previous", c.keepPrevious, 1, 50);
         c.rollbackGraceSeconds = r.integer("rollback-grace-seconds", c.rollbackGraceSeconds, 10, 3600);
-        if (auto backup = r.section("backup")) {
-            c.backup.enabled = backup->flag("enabled", c.backup.enabled);
-            c.backup.minScope =
-                choice<core::Scope>(*backup, "min-scope", c.backup.minScope, core::parseScope, "build, minor or major");
-            c.backup.paths = backup->list("paths");
-            c.backup.destination = backup->text("destination", c.backup.destination);
-            c.backup.keep = backup->integer("keep", c.backup.keep, 1, 100);
-            backup->finish();
-            if (c.backup.enabled && c.backup.paths.empty()) {
-                backup->fail("paths", "must list what to copy when backups are enabled");
+    });
+}
+
+std::expected<BackupConfig, ConfigError> parseBackup(std::string_view text, std::vector<std::string>& warnings) {
+    return load<BackupConfig>(text, "backup.toml", warnings, [](const Reader& r, BackupConfig& c) {
+        c.enabled = r.flag("enabled", c.enabled);
+        c.destination = r.text("destination", c.destination);
+        c.paths = r.list("paths");
+        c.exclude = r.list("exclude");
+        c.compress = r.flag("compress", c.compress);
+        if (c.destination.empty()) {
+            r.fail("destination", "must not be empty");
+        }
+        for (const auto& path : c.paths) {
+            const std::filesystem::path item(path);
+            bool escapes = item.is_absolute() || item.empty();
+            for (const auto& part : item) {
+                escapes = escapes || part == "..";
             }
+            if (escapes) {
+                r.fail("paths", "'" + path + "' must be inside this folder");
+            }
+        }
+        if (auto retention = r.section("retention")) {
+            c.retention.keepLast = retention->integer("keep-last", c.retention.keepLast, 1, 1000);
+            c.retention.keepDaily = retention->integer("keep-daily", c.retention.keepDaily, 0, 3650);
+            c.retention.keepWeekly = retention->integer("keep-weekly", c.retention.keepWeekly, 0, 520);
+            c.retention.maxAgeDays = retention->integer("max-age-days", c.retention.maxAgeDays, 0, 36500);
+            c.retention.maxTotalMib = retention->integer("max-total-mib", c.retention.maxTotalMib, 0, 100000000);
+            retention->finish();
+        }
+        if (auto before = r.section("before-update")) {
+            c.beforeUpdate = before->flag("enabled", c.beforeUpdate);
+            c.minScope =
+                choice<core::Scope>(*before, "min-scope", c.minScope, core::parseScope, "build, minor or major");
+            before->finish();
+        }
+        if (auto schedule = r.section("schedule")) {
+            c.schedule.everyHours = schedule->integer("every-hours", c.schedule.everyHours, 0, 8760);
+            const std::string at = schedule->text("daily-at", "");
+            if (!at.empty()) {
+                c.schedule.daily = core::parseClock(at, c.schedule.hour, c.schedule.minute);
+                if (!c.schedule.daily) {
+                    schedule->fail("daily-at", "must look like HH:MM");
+                }
+            }
+            c.schedule.when = schedule->text("when", "");
+            if (!c.schedule.when.empty()) {
+                if (auto parsed = expr::Expression::parse(c.schedule.when); !parsed) {
+                    schedule->fail("when", parsed.error().message + " (column " +
+                                               std::to_string(parsed.error().column + 1) + ")");
+                }
+            }
+            schedule->finish();
+        }
+        if (auto commands = r.section("commands")) {
+            c.beforeCommands = commands->list("before");
+            c.afterCommands = commands->list("after");
+            c.settleSeconds = commands->integer("settle-seconds", c.settleSeconds, 0, 600);
+            commands->finish();
+        }
+        const bool automatic = c.beforeUpdate || c.schedule.everyHours > 0 || c.schedule.daily;
+        if (c.enabled && automatic && c.paths.empty()) {
+            r.fail("paths", "must list what to copy when backups are enabled");
         }
     });
 }
@@ -222,6 +275,11 @@ std::expected<Config, ConfigError> loadConfigDirectory(const std::filesystem::pa
     if (!status) {
         return std::unexpected(status.error());
     }
+    auto backup = parseBackup(read("backup.toml"), config.warnings);
+    if (!backup) {
+        return std::unexpected(backup.error());
+    }
+    config.backup = std::move(*backup);
     config.status = std::move(*status);
     config.launcher = std::move(*launcher);
     config.updates = std::move(*updates);

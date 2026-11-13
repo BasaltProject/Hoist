@@ -6,6 +6,7 @@
   "dependencies": [
     "doctest",
     "mbedtls",
-    "tomlplusplus"
+    "tomlplusplus",
+    "zlib"
   ]
 }

@@ -39,11 +39,11 @@ no other program on the host. **One folder holds one product and one Hoist.**
 
 ```bash
 mkdir my-server && cd my-server
-hoist init --target server        # or --target proxy; writes config/*.toml
+hoist init --target server        # or --target proxy; writes config/hoist/*.toml
 hoist run                         # installs the latest release, starts it, keeps it up to date
 ```
 
-Hoist only announces a new version in the log until you enable a way to apply it in `config/schedule.toml`.
+Hoist only announces a new version in the log until you enable a way to apply it in `config/hoist/schedule.toml`.
 The binary is named `BasaltHoist-<version>-<platform>-<arch>`; `hoist` is the same program under its short name.
 
 | Command | What it does |
@@ -60,13 +60,14 @@ exit code 0 (you typed `stop`), Hoist stops too. Any other exit is a crash and i
 
 ## Configuration
 
-Configuration lives in `config/`, one TOML file per domain, written commented on the first run.
+Configuration lives in `config/hoist/`, next to the product's own `config/`, one TOML file per domain, written commented on the first run.
 
 | File | What it holds |
 |---|---|
 | `launcher.toml` | Which product, its command and arguments, how it is stopped and restarted after a crash |
-| `updates.toml` | Channel (`release` or `nightly`), scope, check interval, download speed limit, backups, rollback grace |
+| `updates.toml` | Channel (`release` or `nightly`), scope, check interval, download speed limit, rollback grace |
 | `schedule.toml` | When an update is applied: daily restart, immediate, and any number of conditions |
+| `backup.toml` | What is copied, where, how many are kept, and when: before an update, on a schedule or on demand |
 | `status.toml` | How Hoist reads the player count from the product (API with a token, or the server list ping) |
 
 **Scope** says how far an update may go. `build` takes `26.3.3` to `26.3.4`; `minor` also takes `26.4.x`; `major` also
@@ -93,6 +94,34 @@ The placeholders are `%time%`, `%hour%`, `%minute%`, `%weekday%`, `%players_onli
 `%uptime_minutes%`, `%update_available%`, `%installed_version%`, `%new_version%`, `%update_jump%`, `%channel%`. A
 placeholder with no value makes the condition false, so nothing is ever applied blind. `schedule.toml` is reloaded
 while Hoist runs.
+
+## Backups
+
+Hoist doubles as a backup system for the product's data. Nothing is copied until you list what to copy in
+`backup.toml`; the defaults cover `worlds`, `config` and `players.db`.
+
+```bash
+hoist backup create [label]       # take a copy now
+hoist backup list
+hoist backup restore <name|latest>
+hoist backup delete <name>
+```
+
+Each copy is named after when it was taken (UTC) and why, such as `20261113-040000-scheduled`, and is either a folder or,
+with `compress = true`, a single `.zip`. Copies are written aside and renamed when complete, so a cut backup is never
+listed. Besides the commands, `enabled = true` turns on the automatic ones:
+
+- **Before an update**, taken while the product is stopped, from a chosen update size up (`[before-update]`). If it
+  fails, the update is not applied.
+- **On a schedule** (`[schedule]`): every N hours, at a time of day, or only while an expression over placeholders is
+  true, for example `%players_online% == 0`. Hoist runs it while the product keeps playing; `[commands]` can write
+  `save-off` and `save-all` style commands to its console before and after.
+- **Retention** (`[retention]`): the newest N copies, one per day, one per week, a maximum age and a total size. The
+  newest copy is never deleted.
+
+`exclude` takes patterns such as `*.log` or `cache`. `restore` stops the product, puts the copy back and starts it
+again; a safety copy of what it replaces is taken first. When a Hoist is already running in the folder, `create` and
+`restore` are handed to it.
 
 ## Building
 
