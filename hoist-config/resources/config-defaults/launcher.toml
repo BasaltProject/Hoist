@@ -1,0 +1,32 @@
+format = 1
+# What Hoist runs and how it keeps it running. One folder, one product.
+
+# "server" or "proxy".
+target = "@TARGET@"
+
+# Let Hoist download and install the product. When false, Hoist only supervises `command`.
+managed = true
+
+# The program to run. Empty means the binary Hoist installed.
+command = ""
+
+# Arguments passed to the product. Hoist never accepts a license for you: if the product needs a flag for that,
+# writing it here is your decision.
+args = []
+
+working-directory = "."
+
+# Written to the product's console to stop it cleanly. Hoist waits for it to save and exit.
+stop-command = "stop"
+stop-timeout-seconds = 60
+
+# After the timeout, end the process by force. Off means Hoist keeps waiting and says so in the log.
+kill-after-timeout = true
+
+# Start the product again when it stops on its own, after a pause.
+restart-on-crash = true
+restart-delay-seconds = 5
+
+# Give up after this many crashes in a row. A run longer than stable-seconds resets the count.
+max-consecutive-crashes = 5
+stable-seconds = 300

@@ -1,0 +1,40 @@
+format = 1
+# When a found update is applied. With nothing enabled here, update by hand with `hoist update`.
+# Any enabled mode that fires applies the update; the first one that does wins.
+#
+# A condition is an expression over placeholders written between percent signs:
+#   %time%             minutes since midnight, to compare with a clock such as 03:00
+#   %hour% %minute% %weekday% (1 Monday to 7 Sunday) %day% %month% %year%
+#   %players_online% %players_max%        from the product's API, or from its server list ping
+#   %uptime_minutes%   how long the product has been running
+#   %update_available% %installed_version% %new_version% %update_jump% (build, minor or major) %channel%
+# Operators: && || ! == != < <= > >= + - * / and parentheses. Text goes in 'quotes'.
+# A placeholder with no value makes the expression false: nothing is applied blind.
+
+# "local", "UTC" or an IANA name such as "Europe/Madrid".
+timezone = "local"
+
+[daily-restart]
+enabled = false
+time = "04:00"
+# Tell the players this many seconds ahead through the product's console. 0 means no warning.
+warning-seconds = 60
+# The console command for the warning. The placeholder %restart_in% is the seconds left.
+warning-command = "say Restarting in %restart_in% seconds to update"
+
+[immediate]
+enabled = false
+warning-seconds = 60
+warning-command = "say Restarting in %restart_in% seconds to update"
+
+# Any number of conditions. Remove the # to use one.
+# [[conditions]]
+# name = "quiet night"
+# when = "%time% >= 03:00 && %time% < 06:00 && %players_online% < 5"
+# grace-seconds = 120
+# warning-seconds = 60
+# warning-command = "say Restarting in %restart_in% seconds to update"
+#
+# [[conditions]]
+# name = "empty"
+# when = "%players_online% == 0"

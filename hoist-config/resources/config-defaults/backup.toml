@@ -1,0 +1,52 @@
+format = 1
+# Backups of what the product keeps on disk: worlds, configuration, databases.
+# Hoist can take them before an update, on a schedule, or on demand. Manage them with
+#   hoist backup create | list | restore <name> | delete <name>
+# Every backup is named after the moment it was taken and why: 20261113-040000-scheduled.
+
+# Turns on the automatic backups below (before an update, and the schedule). The commands always work.
+enabled = false
+
+# Where copies are kept. A relative path is inside this folder; an absolute one can be another disk.
+destination = ".hoist/backups"
+
+# What is copied, relative to this folder.
+paths = ["worlds", "config", "players.db"]
+
+# Left out of every copy. A pattern without a slash matches at any depth. * stays inside one folder, ** does not.
+exclude = ["*.log", "*.tmp", "cache"]
+
+# One .zip file per backup instead of a folder. Smaller, and easy to move to another machine.
+compress = false
+
+[retention]
+# The newest copies, always kept.
+keep-last = 3
+# Also keep the newest copy of each of the last N days, and of the last N weeks. 0 turns it off.
+keep-daily = 0
+keep-weekly = 0
+# Delete copies older than this many days. The newest copy is never deleted. 0 means never.
+max-age-days = 0
+# Delete the oldest copies while the total is over this size in MiB. 0 means no limit.
+max-total-mib = 0
+
+[before-update]
+enabled = true
+# Only for updates this big or bigger: build, minor or major.
+min-scope = "minor"
+
+[schedule]
+# A backup every N hours. 0 turns it off.
+every-hours = 0
+# A backup at this time of day, in the timezone of schedule.toml, such as "04:30". Empty turns it off.
+daily-at = ""
+# Only while this expression about placeholders is true (the same ones as schedule.toml). Empty means always.
+when = ""
+
+[commands]
+# Written to the product's console before a backup taken while it runs, and after it. Hoist then waits
+# settle-seconds so the product can finish saving. A vanilla style console would use
+#   before = ["save-off", "save-all flush"]  and  after = ["save-on"]
+before = []
+after = []
+settle-seconds = 3

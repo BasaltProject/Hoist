@@ -1,0 +1,39 @@
+format = 1
+# How Hoist looks for new versions. Hoist only announces a version in the log until a mode in schedule.toml applies it.
+
+# "release" follows the latest release. "nightly" follows the moving nightly build.
+channel = "release"
+
+# How far an update may go. A version beyond it is announced and never installed.
+#   build: 26.3.3 to 26.3.4
+#   minor: also 26.4.x
+#   major: also 27.x
+scope = "build"
+
+# Minutes between checks. The check runs in the background and never touches the running product.
+check-interval-minutes = 30
+
+# Download a new version as soon as it is found, so applying it only needs a restart.
+predownload = false
+
+# Cap the download speed in KiB per second so a new version does not starve the players. 0 is unlimited.
+download-limit-kib-per-second = 0
+
+# Previous versions kept for rollback.
+keep-previous = 2
+
+# If the new version stops within this many seconds of starting, Hoist goes back to the previous one.
+rollback-grace-seconds = 120
+
+# Empty means BasaltProject/Server or BasaltProject/Proxy, following `target`.
+repository = ""
+api-url = "https://api.github.com"
+
+# A GitHub token raises the rate limit. The environment variable HOIST_GITHUB_TOKEN is read when this is empty.
+token = ""
+
+# Empty means the platform this Hoist was built for, such as "Linux", "Linux-musl", "macOS" or "Windows".
+asset-platform = ""
+
+# A PEM file of trusted certificates. Empty means the host's own list.
+ca-file = ""

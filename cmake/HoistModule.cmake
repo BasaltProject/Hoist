@@ -22,3 +22,22 @@ function(hoist_test name)
     target_link_libraries(${name} PRIVATE ${ARG_LIBS} doctest::doctest)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
+
+# hoist_embed_text(<name> NAMESPACE <ns> HEADER <path> SUFFIX <suffix> FILES <files...>) turns text files into
+# string constants (`backup.toml` becomes `kBackup<suffix>`) so a release stays one self-contained executable.
+function(hoist_embed_text name)
+    cmake_parse_arguments(ARG "" "NAMESPACE;HEADER;SUFFIX" "FILES" ${ARGN})
+    set(generated ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    set(header ${generated}/include/${ARG_HEADER})
+    set(source ${generated}/${name}.cpp)
+    add_custom_command(
+        OUTPUT ${header} ${source}
+        COMMAND ${CMAKE_COMMAND} -DOUT_HEADER=${header} -DOUT_SOURCE=${source} -DHEADER_INCLUDE=${ARG_HEADER}
+                -DTEXT_NAMESPACE=${ARG_NAMESPACE} -DNAME_SUFFIX=${ARG_SUFFIX} "-DTEXT_FILES=${ARG_FILES}"
+                -P ${CMAKE_SOURCE_DIR}/cmake/HoistEmbedText.cmake
+        DEPENDS ${ARG_FILES} ${CMAKE_SOURCE_DIR}/cmake/HoistEmbedText.cmake
+        COMMENT "Embedding ${name}"
+        VERBATIM)
+    add_library(${name} STATIC ${source} ${header})
+    target_include_directories(${name} PUBLIC ${generated}/include)
+endfunction()

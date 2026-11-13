@@ -1,0 +1,23 @@
+format = 1
+# How Hoist reads the player count and more from the running product, for the placeholders in schedule.toml.
+# The API gives everything; the server list ping (the one a Minecraft client does) works with any server and only
+# gives %players_online% and %players_max%. Without either, those placeholders have no value and a condition that
+# needs them is never true.
+
+# Seconds to wait for an answer.
+timeout-seconds = 5
+
+# The product's management API, with a token. Basalt Server enables it on its own, on 127.0.0.1:25580, and keeps the
+# token in .basalt/remote-token. An existing install with the API off is not touched: Hoist says so in the log.
+[api]
+enabled = true
+host = "127.0.0.1"
+# 0 means the product's default port.
+port = 0
+# Empty means the product's default token file, relative to the working directory.
+token-file = ""
+
+[ping]
+enabled = true
+host = "127.0.0.1"
+port = 25565
