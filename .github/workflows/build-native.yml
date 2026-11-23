@@ -55,6 +55,11 @@ jobs:
               echo "HOIST_CMAKE_ARGS=-DCMAKE_OSX_ARCHITECTURES=${{ inputs.arch }} -DVCPKG_TARGET_TRIPLET=x64-osx" >> "$GITHUB_ENV"
           fi
 
+      - name: Install the toolchain
+        if: runner.os == 'Windows'
+        shell: bash
+        run: .github/scripts/select-windows-compiler.sh
+
       - name: Check the format
         if: inputs.target == 'Linux-x64'
         run: find hoist-* \( -name '*.hpp' -o -name '*.cpp' \) | xargs clang-format-20 --dry-run --Werror
