@@ -42,9 +42,9 @@ jobs:
       - name: Install the toolchain
         if: runner.os == 'Linux'
         run: |
-          wget -qO llvm.sh https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 20
-          sudo apt-get install -y ninja-build clang-format-20 clang-tidy-20
-          echo "HOIST_CMAKE_ARGS=-DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20" >> "$GITHUB_ENV"
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-19 clang-format-19 clang-tidy-19 lld-19 libclang-rt-19-dev
+          echo "HOIST_CMAKE_ARGS=-DCMAKE_C_COMPILER=clang-19 -DCMAKE_CXX_COMPILER=clang++-19" >> "$GITHUB_ENV"
 
       - name: Install the toolchain
         if: runner.os == 'macOS'
@@ -62,14 +62,14 @@ jobs:
 
       - name: Check the format
         if: inputs.target == 'Linux-x64'
-        run: find hoist-* \( -name '*.hpp' -o -name '*.cpp' \) | xargs clang-format-20 --dry-run --Werror
+        run: find hoist-* \( -name '*.hpp' -o -name '*.cpp' \) | xargs clang-format-19 --dry-run --Werror
 
       - name: Lint
         if: inputs.target == 'Linux-x64'
         run: |
           cmake --preset debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $HOIST_CMAKE_ARGS
           cmake --build build/debug --target hoist-config-defaults
-          find hoist-* -name '*.cpp' -not -path '*/test/*' | xargs clang-tidy-20 -p build/debug --quiet
+          find hoist-* -name '*.cpp' -not -path '*/test/*' | xargs clang-tidy-19 -p build/debug --quiet
 
       - name: Configure
         run: cmake --preset release -DHOIST_WERROR=ON $HOIST_CMAKE_ARGS ${{ inputs.version && format('"-DHOIST_VERSION_OVERRIDE={0}"', inputs.version) || '' }}
