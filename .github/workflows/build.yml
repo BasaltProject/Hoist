@@ -120,7 +120,7 @@ jobs:
             done
           '
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: basalt-hoist-Linux-musl-${{ matrix.arch }}
           path: build/release/bin/BasaltHoist-*
@@ -201,7 +201,7 @@ jobs:
               if readelf -d "$binary" | grep NEEDED | grep -E 'libc\+\+|libcxxrt'; then exit 1; fi
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: basalt-hoist-${{ matrix.target }}
           path: build/release/bin/BasaltHoist-*
@@ -253,7 +253,7 @@ jobs:
               echo 'The executable needs a runtime Android does not ship'; exit 1
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: basalt-hoist-${{ matrix.target }}
           path: build/${{ matrix.preset }}/bin/BasaltHoist-*
